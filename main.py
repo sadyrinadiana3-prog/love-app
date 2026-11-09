@@ -107,3 +107,10 @@ async def get_data():
 async def update_data(data: dict):
     save_data(data)
     return {"status": "ok"}
+    import subprocess
+import threading
+
+def run_bot():
+    subprocess.run(["python", "bot.py"])
+
+threading.Thread(target=run_bot, daemon=True).start()
