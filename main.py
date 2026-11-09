@@ -21,8 +21,7 @@ MINI_APP_URL = "https://t.me/anisha_disha_2026_bot/love_window"
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Ссылка на музыку (заглушка, замени на прямую ссылку на mp3)
-MUSIC_URL = "https://example.com/love.mp3"
+MUSIC_URL = "https://example.com/love.mp3" # ЗАМЕНИ НА СВОЮ ССЫЛКУ
 
 LOVE_QUOTES = [
     "«Любовь — это не то, что ты находишь. Любовь — это то, что находит тебя.»",
@@ -61,12 +60,7 @@ HTML_PAGE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root {
-            --bg: #17212b;
-            --card-bg: #232e3c;
-            --btn: #2481cc;
-            --text: #fff;
-        }
+        :root { --bg: #17212b; --card-bg: #232e3c; --btn: #2481cc; --text: #fff; }
         body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); padding: 15px; text-align: center; transition: 0.3s; }
         .card { background: var(--card-bg); border-radius: 15px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         img { width: 100%; border-radius: 10px; margin-bottom: 10px; max-height: 300px; object-fit: cover; }
@@ -154,23 +148,16 @@ HTML_PAGE = """
                 let meet = new Date(currentData.meet_date); let today = new Date();
                 let diff = Math.ceil((meet - today) / (1000 * 60 * 60 * 24));
                 setTimeout(() => {
-                    tg.showPopup({
-                        title: "💖 Наше окно",
-                        message: `До встречи осталось: ${diff} дн.!`,
-                        buttons: [{type: "ok"}]
-                    });
+                    tg.showPopup({ title: "💖 Наше окно", message: `До встречи осталось: ${diff} дн.!`, buttons: [{type: "ok"}] });
                 }, 500);
             }
         }
 
         function updateUI() {
             if (currentData.title) { document.getElementById('appTitle').innerText = currentData.title; }
-            
-            // Стили
             if (currentData.bg_color) document.documentElement.style.setProperty('--bg', currentData.bg_color);
             if (currentData.btn_color) document.documentElement.style.setProperty('--btn', currentData.btn_color);
             
-            // Даты
             if (currentData.meet_date) {
                 let meet = new Date(currentData.meet_date); let today = new Date();
                 let diff = Math.ceil((meet - today) / (1000 * 60 * 60 * 24));
@@ -203,9 +190,7 @@ HTML_PAGE = """
                 });
             };
             
-            // Адаптация под новый формат (объекты вместо строк)
             let formatArr = (arr) => arr.map(item => typeof item === 'string' ? {text: item, done: false} : item);
-            
             renderList('plansList', formatArr(currentData.plans), 'plans');
             renderList('packingList', formatArr(currentData.packing), 'packing');
             renderList('notesList', formatArr(currentData.notes), 'notes');
@@ -425,11 +410,13 @@ async def inline_handler(query: types.InlineQuery):
             meet = datetime.datetime.strptime(data["meet_date"], "%Y-%m-%d").date()
             report_text += f"✈️ До встречи: <b>{(meet - datetime.date.today()).days} дн.</b>\n"
         
+        # ДОБАВЛЕНЫ ЗАМЕТКИ СЮДА!
         report_text += "\n<blockquote><b>📋 Планы:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["plans"], 1)]) if data["plans"] else "  Пусто") + "</blockquote>"
         report_text += "\n<blockquote><b>🎒 Вещи:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["packing"], 1)]) if data["packing"] else "  Пусто") + "</blockquote>"
+        report_text += "\n<blockquote><b>📝 Заметки:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["notes"], 1)]) if data["notes"] else "  Пусто") + "</blockquote>"
         
         photo_url = data.get("custom_photo") or "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg"
-        results.append(InlineQueryResultPhoto(id="report_photo", photo_url=photo_url, thumbnail_url=photo_url, title="📸 Фото + Отчет", description="Фото с отчетом", caption=report_text, parse_mode="HTML"))
+        results.append(InlineQueryResultPhoto(id="report_photo", photo_url=photo_url, thumbnail_url=photo_url, title="📸 Фото + Отчет", description="Фото с отчетом и заметками", caption=report_text, parse_mode="HTML"))
 
     if "окно" in text or "ссылка" in text or not text:
         results.append(InlineQueryResultArticle(id="link_miniapp", title="💖 Открыть Mini App", description="Откроет окно в Telegram", input_message_content=InputTextMessageContent(message_text=f"💖 Наше окно (Mini App):\n{MINI_APP_URL}")))
