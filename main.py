@@ -15,23 +15,38 @@ app = FastAPI()
 DATA_FILE = "webapp_data.json"
 
 BOT_TOKEN = "9237588674:AAEfZD8JL9GIn5yC04kyn9Y-DZYU5k41aIw"
-WEB_APP_URL = "https://t.me/anisha_disha_2026_bot/love_window"
+SERVER_URL = "https://love-app-rb47.onrender.com"
+MINI_APP_URL = "https://t.me/anisha_disha_2026_bot/love_window"
+
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
+
+# Ссылка на музыку (заглушка, замени на прямую ссылку на mp3)
+MUSIC_URL = "https://example.com/love.mp3"
 
 LOVE_QUOTES = [
     "«Любовь — это не то, что ты находишь. Любовь — это то, что находит тебя.»",
     "«Мы выбираем, нас выбирают, Как это часто не совпадает!»",
-    "«Одним взглядом можно убить любовь, одним же взглядом можно воскресить ее.» — Уильям Шекспир",
-    "«Тоска по любви есть сама любовь.» — Жан Поль",
-    "«Я люблю тебя не за то, кто ты, а за то, кто я, когда я с тобой.» — Маркес"
+    "«Одним взглядом можно убить любовь, одним же взглядом можно воскресить ее.» — <i>Уильям Шекспир</i>",
+    "«Тоска по любви есть сама любовь.» — <i>Жан Поль</i>",
+    "«Я люблю тебя не за то, кто ты, а за то, кто я, когда я с тобой.» — <i>Маркес</i>"
 ]
 
 def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
-    return {"meet_date": None, "plans": [], "packing": [], "notes": [], "custom_photo": "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg"}
+    return {
+        "meet_date": None, 
+        "plans": [], 
+        "packing": [], 
+        "notes": [], 
+        "custom_photo": "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg", 
+        "title": "💖 Аниша и Диша 💖",
+        "bg_color": "#17212b",
+        "btn_color": "#2481cc",
+        "rel_date": None
+    }
 
 def save_data(data):
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
@@ -46,25 +61,43 @@ HTML_PAGE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { font-family: sans-serif; background: #17212b; color: #fff; padding: 15px; text-align: center; }
-        .card { background: #232e3c; border-radius: 15px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        :root {
+            --bg: #17212b;
+            --card-bg: #232e3c;
+            --btn: #2481cc;
+            --text: #fff;
+        }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); padding: 15px; text-align: center; transition: 0.3s; }
+        .card { background: var(--card-bg); border-radius: 15px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         img { width: 100%; border-radius: 10px; margin-bottom: 10px; max-height: 300px; object-fit: cover; }
         input, button { width: 100%; padding: 12px; margin: 5px 0; border-radius: 8px; border: none; font-size: 16px; box-sizing: border-box; }
-        button { background: #2481cc; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        button:active { background: #1a5f99; transform: scale(0.98); }
-        .date-big { font-size: 22px; margin: 15px 0; color: #64b5f6; font-weight: bold; }
+        button { background: var(--btn); color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:active { opacity: 0.8; transform: scale(0.98); }
+        .date-big { font-size: 22px; margin: 15px 0; color: #64b5f6; font-weight: bold; font-style: italic; }
         .item { text-align: left; padding: 8px; background: rgba(255,255,255,0.1); margin: 5px 0; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
-        .del-btn { background: #e53935; width: auto; padding: 5px 10px; margin: 0; font-size: 14px; }
+        .item.done { opacity: 0.5; text-decoration: line-through; }
+        .del-btn { background: #e53935; width: auto; padding: 5px 10px; margin: 0 0 0 5px; font-size: 14px; }
+        .done-btn { background: #43a047; width: auto; padding: 5px 10px; margin: 0; font-size: 14px; }
+        h2 { font-style: italic; text-shadow: 0 0 10px rgba(255,255,255,0.2); }
+        .stat-box { font-size: 18px; margin: 10px 0; }
     </style>
 </head>
 <body>
     <div class="card">
         <img id="mainPhoto" src="#">
-        <h2>💖 Аниша и Диша 💖</h2>
+        <h2 id="appTitle"></h2>
         <div id="days" class="date-big">✈️ Загрузка...</div>
+        <div id="relStats" class="stat-box"></div>
         <button onclick="showAlert()" style="background:#ff9800; margin-top:10px;">🔔 Показать уведомление</button>
     </div>
     
+    <div class="card">
+        <h3>🎨 Стиль</h3>
+        <input type="text" id="bgColor" placeholder="Цвет фона (например, #17212b)">
+        <input type="text" id="btnColor" placeholder="Цвет кнопок (например, #2481cc)">
+        <button onclick="changeStyle()">Применить стиль</button>
+    </div>
+
     <div class="card">
         <h3>🖼 Сменить фото</h3>
         <input type="text" id="photoInput" placeholder="Ссылка на новую картинку...">
@@ -72,9 +105,11 @@ HTML_PAGE = """
     </div>
 
     <div class="card">
-        <h3>📅 Дата встречи</h3>
+        <h3>📅 Даты</h3>
         <input type="date" id="dateInput">
-        <button onclick="setDate()">Сохранить дату</button>
+        <button onclick="setDate()">Дата встречи</button>
+        <input type="date" id="relDateInput">
+        <button onclick="setRelDate()">Дата отношений</button>
     </div>
 
     <div class="card">
@@ -101,6 +136,7 @@ HTML_PAGE = """
     <script>
         let tg = window.Telegram.WebApp; tg.expand();
         let currentData = {};
+        let alertShown = false;
 
         function showAlert() {
             if (currentData.meet_date) {
@@ -112,9 +148,29 @@ HTML_PAGE = """
 
         async function loadData() {
             let res = await fetch('/api/data'); currentData = await res.json(); updateUI();
+            
+            if (!alertShown && currentData.meet_date) {
+                alertShown = true;
+                let meet = new Date(currentData.meet_date); let today = new Date();
+                let diff = Math.ceil((meet - today) / (1000 * 60 * 60 * 24));
+                setTimeout(() => {
+                    tg.showPopup({
+                        title: "💖 Наше окно",
+                        message: `До встречи осталось: ${diff} дн.!`,
+                        buttons: [{type: "ok"}]
+                    });
+                }, 500);
+            }
         }
 
         function updateUI() {
+            if (currentData.title) { document.getElementById('appTitle').innerText = currentData.title; }
+            
+            // Стили
+            if (currentData.bg_color) document.documentElement.style.setProperty('--bg', currentData.bg_color);
+            if (currentData.btn_color) document.documentElement.style.setProperty('--btn', currentData.btn_color);
+            
+            // Даты
             if (currentData.meet_date) {
                 let meet = new Date(currentData.meet_date); let today = new Date();
                 let diff = Math.ceil((meet - today) / (1000 * 60 * 60 * 24));
@@ -122,26 +178,51 @@ HTML_PAGE = """
                 document.getElementById('dateInput').value = currentData.meet_date;
             } else { document.getElementById('days').innerText = "✈️ Дата не задана"; }
             
+            if (currentData.rel_date) {
+                let rel = new Date(currentData.rel_date); let today = new Date();
+                let diff = Math.floor((today - rel) / (1000 * 60 * 60 * 24));
+                document.getElementById('relStats').innerText = `❤️ Вместе уже: ${diff} дн.`;
+                document.getElementById('relDateInput').value = currentData.rel_date;
+            }
+
             if (currentData.custom_photo) { document.getElementById('mainPhoto').src = currentData.custom_photo; }
             
             let renderList = (id, arr, key) => {
                 let list = document.getElementById(id); list.innerHTML = '';
                 arr.forEach((item, i) => {
-                    let div = document.createElement('div'); div.className = 'item';
-                    div.innerHTML = `<span>🔸 ${item}</span><button class="del-btn" onclick="delItem('${key}', ${i})">❌</button>`;
+                    let div = document.createElement('div'); 
+                    div.className = 'item' + (item.done ? ' done' : '');
+                    div.innerHTML = `
+                        <span>${item.done ? '✅' : '🔸'} ${item.text}</span>
+                        <div>
+                            <button class="done-btn" onclick="toggleItem('${key}', ${i})">${item.done ? '↩️' : '✔️'}</button>
+                            <button class="del-btn" onclick="delItem('${key}', ${i})">❌</button>
+                        </div>
+                    `;
                     list.appendChild(div);
                 });
             };
-            renderList('plansList', currentData.plans, 'plans');
-            renderList('packingList', currentData.packing, 'packing');
-            renderList('notesList', currentData.notes, 'notes');
+            
+            // Адаптация под новый формат (объекты вместо строк)
+            let formatArr = (arr) => arr.map(item => typeof item === 'string' ? {text: item, done: false} : item);
+            
+            renderList('plansList', formatArr(currentData.plans), 'plans');
+            renderList('packingList', formatArr(currentData.packing), 'packing');
+            renderList('notesList', formatArr(currentData.notes), 'notes');
         }
 
         async function setDate() { let val = document.getElementById('dateInput').value; if (!val) return; currentData.meet_date = val; await saveData(); }
+        async function setRelDate() { let val = document.getElementById('relDateInput').value; if (!val) return; currentData.rel_date = val; await saveData(); }
         async function changePhoto() { let val = document.getElementById('photoInput').value; if (!val) return; currentData.custom_photo = val; await saveData(); }
-        async function addPlan() { let val = document.getElementById('planInput').value; if (!val) return; currentData.plans.push(val); document.getElementById('planInput').value = ''; await saveData(); }
-        async function addPacking() { let val = document.getElementById('packingInput').value; if (!val) return; currentData.packing.push(val); document.getElementById('packingInput').value = ''; await saveData(); }
-        async function addNote() { let val = document.getElementById('noteInput').value; if (!val) return; currentData.notes.push(val); document.getElementById('noteInput').value = ''; await saveData(); }
+        async function changeStyle() { 
+            currentData.bg_color = document.getElementById('bgColor').value || currentData.bg_color;
+            currentData.btn_color = document.getElementById('btnColor').value || currentData.btn_color;
+            await saveData(); 
+        }
+        async function addPlan() { let val = document.getElementById('planInput').value; if (!val) return; currentData.plans.push({text: val, done: false}); document.getElementById('planInput').value = ''; await saveData(); }
+        async function addPacking() { let val = document.getElementById('packingInput').value; if (!val) return; currentData.packing.push({text: val, done: false}); document.getElementById('packingInput').value = ''; await saveData(); }
+        async function addNote() { let val = document.getElementById('noteInput').value; if (!val) return; currentData.notes.push({text: val, done: false}); document.getElementById('noteInput').value = ''; await saveData(); }
+        async function toggleItem(key, index) { currentData[key][index].done = !currentData[key][index].done; await saveData(); }
         async function delItem(key, index) { currentData[key].splice(index, 1); await saveData(); }
 
         async function saveData() {
@@ -171,42 +252,56 @@ async def update_data(data: dict):
 @dp.message(CommandStart())
 async def start(message: types.Message):
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="💖 Открыть наше окно", web_app=WebAppInfo(url=WEB_APP_URL)))
+    builder.row(InlineKeyboardButton(text="💖 Открыть наше окно", web_app=WebAppInfo(url=SERVER_URL)))
     await message.answer("Привет! Нажми на кнопку ниже, чтобы открыть наше общее окно. Или напиши /помощь.", reply_markup=builder.as_markup())
 
 @dp.message(F.text == "/помощь")
 async def help_cmd(message: types.Message):
     text = (
-        "💖 **Все команды:**\n\n"
-        "📸 /фото — отправить наше фото\n"
-        "💌 /любовь — случайная цитата\n"
-        "📅 /дата 2026-12-31 — дата встречи\n"
+        "💖 <b>Все команды:</b>\n\n"
+        "🎵 /музыка — наша песня\n"
+        "📸 /фото — отправить фото\n"
+        "💌 /любовь — <i>цитата</i>\n"
+        "📅 /дата 2026-12-31\n"
+        "❤️ /отношения 2024-01-01\n"
         "📊 /дни — уведомление\n"
-        "📋 /план Текст — добавить план\n"
-        "🎒 /вещь Текст — добавить вещь\n"
-        "📝 /заметка Текст — добавить заметку\n"
-        "📋 /отчет — полный список\n\n"
-        "🗑 **Удаление:**\n"
+        "📋 /план Текст\n"
+        "🎒 /вещь Текст\n"
+        "📝 /заметка Текст\n"
+        "📋 /отчет\n"
+        "🏷 /название Новое имя\n\n"
+        "🗑 <b>Удаление:</b>\n"
         "❌ /удалить_план 1\n"
         "❌ /удалить_вещь 1\n"
         "❌ /удалить_заметку 1\n"
         "🗓 /удалить_дату\n"
-        "🗑 /очистить — всё сразу\n\n"
-        "🌐 **В чате с подругой:**\n"
-        "Напиши `@anisha_disha_2026_bot ` и выбери вариант."
+        "🗑 /очистить"
     )
-    await message.answer(text, parse_mode="Markdown")
+    await message.answer(text, parse_mode="HTML")
+
+@dp.message(F.text == "/музыка")
+async def music_cmd(message: types.Message):
+    await message.answer_audio(audio=MUSIC_URL, caption="🎵 Наша песня: Billie Eilish — i love you")
+
+@dp.message(F.text.startswith("/название "))
+async def set_title(message: types.Message):
+    new_title = message.text.replace("/название ", "").strip()
+    if new_title:
+        data = load_data()
+        data["title"] = new_title
+        save_data(data)
+        await message.answer(f"✅ Название изменено на: <i>{new_title}</i>", parse_mode="HTML")
 
 @dp.message(F.text == "/фото")
 async def photo_cmd(message: types.Message):
     data = load_data()
     photo_url = data.get("custom_photo") or "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg"
-    await message.answer_photo(photo=photo_url, caption="💖 Наша фоточка")
+    await message.answer_photo(photo=photo_url, caption="💖 <i>Наша фоточка</i>", parse_mode="HTML")
 
 @dp.message(F.text == "/любовь")
 async def love_cmd(message: types.Message):
     quote = random.choice(LOVE_QUOTES)
-    await message.answer(f"<blockquote>{quote}</blockquote>", parse_mode="HTML")
+    await message.answer(f"<blockquote><i>{quote}</i></blockquote>", parse_mode="HTML")
 
 @dp.message(F.text.startswith("/дата "))
 async def set_date(message: types.Message):
@@ -214,8 +309,17 @@ async def set_date(message: types.Message):
         dt = message.text.replace("/дата ", "").strip()
         datetime.datetime.strptime(dt, "%Y-%m-%d")
         data = load_data(); data["meet_date"] = dt; save_data(data)
-        await message.answer(f"✅ Дата установлена: {dt}")
-    except: await message.answer("❌ Формат: /дата 2026-12-31")
+        await message.answer(f"✅ Дата установлена: <b>{dt}</b>", parse_mode="HTML")
+    except: await message.answer("❌ Формат: <code>/дата 2026-12-31</code>", parse_mode="HTML")
+
+@dp.message(F.text.startswith("/отношения "))
+async def set_rel_date(message: types.Message):
+    try:
+        dt = message.text.replace("/отношения ", "").strip()
+        datetime.datetime.strptime(dt, "%Y-%m-%d")
+        data = load_data(); data["rel_date"] = dt; save_data(data)
+        await message.answer(f"✅ Дата отношений: <b>{dt}</b>", parse_mode="HTML")
+    except: await message.answer("❌ Формат: <code>/отношения 2024-01-01</code>", parse_mode="HTML")
 
 @dp.message(F.text == "/дни")
 async def days_cmd(message: types.Message):
@@ -223,41 +327,47 @@ async def days_cmd(message: types.Message):
     if data.get("meet_date"):
         meet = datetime.datetime.strptime(data["meet_date"], "%Y-%m-%d").date()
         days = (meet - datetime.date.today()).days
-        await message.answer(f"💖 До встречи осталось: {days} дн.!")
+        await message.answer(f"💖 До встречи осталось: <b>{days} дн.</b>! 🎆", parse_mode="HTML")
     else: await message.answer("❌ Дата не задана.")
 
 @dp.message(F.text.startswith("/план "))
 async def add_plan(message: types.Message):
     plan = message.text.replace("/план ", "").strip()
     if plan:
-        data = load_data(); data["plans"].append(plan); save_data(data)
-        await message.answer(f"✅ План добавлен: {plan}")
+        data = load_data(); data["plans"].append({"text": plan, "done": False}); save_data(data)
+        await message.answer(f"✅ План добавлен: <i>{plan}</i>", parse_mode="HTML")
 
 @dp.message(F.text.startswith("/вещь "))
 async def add_packing(message: types.Message):
     item = message.text.replace("/вещь ", "").strip()
     if item:
-        data = load_data(); data["packing"].append(item); save_data(data)
-        await message.answer(f"✅ Вещь добавлена: {item}")
+        data = load_data(); data["packing"].append({"text": item, "done": False}); save_data(data)
+        await message.answer(f"✅ Вещь добавлена: <i>{item}</i>", parse_mode="HTML")
 
 @dp.message(F.text.startswith("/заметка "))
 async def add_note(message: types.Message):
     note = message.text.replace("/заметка ", "").strip()
     if note:
-        data = load_data(); data["notes"].append(note); save_data(data)
-        await message.answer(f"✅ Заметка добавлена: {note}")
+        data = load_data(); data["notes"].append({"text": note, "done": False}); save_data(data)
+        await message.answer(f"✅ Заметка добавлена: <i>{note}</i>", parse_mode="HTML")
 
 @dp.message(F.text == "/отчет")
 async def report(message: types.Message):
     data = load_data()
-    text = "💖 **Отчет** 💖\n\n"
+    title = data.get("title", "💖 Аниша и Диша 💖")
+    text = f"<b>{title}</b>\n\n"
     if data.get("meet_date"):
         meet = datetime.datetime.strptime(data["meet_date"], "%Y-%m-%d").date()
-        text += f"✈️ До встречи: {(meet - datetime.date.today()).days} дн.\n"
-    text += "\n📋 Планы:\n" + ("\n".join([f"  {i}. {p}" for i, p in enumerate(data["plans"], 1)]) if data["plans"] else "  Пусто")
-    text += "\n\n🎒 Вещи:\n" + ("\n".join([f"  {i}. {p}" for i, p in enumerate(data["packing"], 1)]) if data["packing"] else "  Пусто")
-    text += "\n\n📝 Заметки:\n" + ("\n".join([f"  {i}. {p}" for i, p in enumerate(data["notes"], 1)]) if data["notes"] else "  Пусто")
-    await message.answer(text, parse_mode="Markdown")
+        text += f"✈️ До встречи: <b>{(meet - datetime.date.today()).days} дн.</b>\n"
+    if data.get("rel_date"):
+        rel = datetime.datetime.strptime(data["rel_date"], "%Y-%m-%d").date()
+        text += f"❤️ Вместе: <b>{(datetime.date.today() - rel).days} дн.</b>\n"
+    
+    text += "\n<blockquote><b>📋 Планы:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["plans"], 1)]) if data["plans"] else "  Пусто") + "</blockquote>"
+    text += "\n<blockquote><b>🎒 Вещи:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["packing"], 1)]) if data["packing"] else "  Пусто") + "</blockquote>"
+    text += "\n<blockquote><b>📝 Заметки:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["notes"], 1)]) if data["notes"] else "  Пусто") + "</blockquote>"
+    
+    await message.answer(text, parse_mode="HTML")
 
 @dp.message(F.text.startswith("/удалить_план "))
 async def del_plan(message: types.Message):
@@ -266,7 +376,7 @@ async def del_plan(message: types.Message):
         data = load_data()
         if 0 <= idx < len(data["plans"]):
             removed = data["plans"].pop(idx); save_data(data)
-            await message.answer(f"✅ Удален план: {removed}")
+            await message.answer(f"✅ Удален план: <i>{removed['text']}</i>", parse_mode="HTML")
     except: await message.answer("❌ Напиши номер: /удалить_план 1")
 
 @dp.message(F.text.startswith("/удалить_вещь "))
@@ -276,7 +386,7 @@ async def del_packing(message: types.Message):
         data = load_data()
         if 0 <= idx < len(data["packing"]):
             removed = data["packing"].pop(idx); save_data(data)
-            await message.answer(f"✅ Удалена вещь: {removed}")
+            await message.answer(f"✅ Удалена вещь: <i>{removed['text']}</i>", parse_mode="HTML")
     except: await message.answer("❌ Напиши номер: /удалить_вещь 1")
 
 @dp.message(F.text.startswith("/удалить_заметку "))
@@ -286,7 +396,7 @@ async def del_note(message: types.Message):
         data = load_data()
         if 0 <= idx < len(data["notes"]):
             removed = data["notes"].pop(idx); save_data(data)
-            await message.answer(f"✅ Удалена заметка: {removed}")
+            await message.answer(f"✅ Удалена заметка: <i>{removed['text']}</i>", parse_mode="HTML")
     except: await message.answer("❌ Напиши номер: /удалить_заметку 1")
 
 @dp.message(F.text == "/удалить_дату")
@@ -301,70 +411,36 @@ async def clear_all(message: types.Message):
     save_data(data)
     await message.answer("✅ Все данные удалены.")
 
-# --- INLINE РЕЖИМ (В ЧАТЕ С ПОДРУГОЙ) ---
+# --- INLINE РЕЖИМ ---
 @dp.inline_query()
 async def inline_handler(query: types.InlineQuery):
     text = query.query.lower().strip()
     data = load_data()
     results = []
 
-    # 1. Отчет + Фото (одним сообщением)
     if "отчет" in text or "фото" in text or not text:
-        report_text = "💖 **Наш отчет** 💖\n\n"
+        title = data.get("title", "💖 Аниша и Диша 💖")
+        report_text = f"<b>{title}</b>\n\n"
         if data.get("meet_date"):
             meet = datetime.datetime.strptime(data["meet_date"], "%Y-%m-%d").date()
-            report_text += f"✈️ До встречи: {(meet - datetime.date.today()).days} дн.\n"
-        report_text += "\n📋 Планы:\n" + ("\n".join([f"  {i}. {p}" for i, p in enumerate(data["plans"], 1)]) if data["plans"] else "  Пусто")
-        report_text += "\n\n🎒 Вещи:\n" + ("\n".join([f"  {i}. {p}" for i, p in enumerate(data["packing"], 1)]) if data["packing"] else "  Пусто")
-        report_text += "\n\n📝 Заметки:\n" + ("\n".join([f"  {i}. {p}" for i, p in enumerate(data["notes"], 1)]) if data["notes"] else "  Пусто")
+            report_text += f"✈️ До встречи: <b>{(meet - datetime.date.today()).days} дн.</b>\n"
+        
+        report_text += "\n<blockquote><b>📋 Планы:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["plans"], 1)]) if data["plans"] else "  Пусто") + "</blockquote>"
+        report_text += "\n<blockquote><b>🎒 Вещи:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["packing"], 1)]) if data["packing"] else "  Пусто") + "</blockquote>"
         
         photo_url = data.get("custom_photo") or "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg"
-        
-        # Отправляем как фото с подписью (отчет)
-        results.append(InlineQueryResultPhoto(
-            id="report_photo",
-            photo_url=photo_url,
-            thumbnail_url=photo_url,
-            title="📸 Фото + Отчет",
-            description="Наше фото с полным отчетом",
-            caption=report_text,
-            parse_mode="Markdown"
-        ))
+        results.append(InlineQueryResultPhoto(id="report_photo", photo_url=photo_url, thumbnail_url=photo_url, title="📸 Фото + Отчет", description="Фото с отчетом", caption=report_text, parse_mode="HTML"))
 
-    # 2. Ссылка на окно (вместо кнопки)
-    if "окно" in text or not text:
-        results.append(InlineQueryResultArticle(
-            id="open_app_link",
-            title="💖 Ссылка на наше окно",
-            description="Нажми, чтобы скопировать и открыть в браузере",
-            input_message_content=InputTextMessageContent(
-                message_text=f"💖 Наше окно: {WEB_APP_URL}\n\nСкопируй ссылку и открой в браузере (или нажми в боте)."
-            )
-        ))
+    if "окно" in text or "ссылка" in text or not text:
+        results.append(InlineQueryResultArticle(id="link_miniapp", title="💖 Открыть Mini App", description="Откроет окно в Telegram", input_message_content=InputTextMessageContent(message_text=f"💖 Наше окно (Mini App):\n{MINI_APP_URL}")))
+        results.append(InlineQueryResultArticle(id="link_website", title="🌐 Открыть сайт", description="Откроет сайт в браузере", input_message_content=InputTextMessageContent(message_text=f"🌐 Наш сайт:\n{SERVER_URL}")))
 
-    # 3. Цитаты
     if "любовь" in text or not text:
         for i, quote in enumerate(LOVE_QUOTES):
-            results.append(InlineQueryResultArticle(
-                id=f"quote_{i}", title=f"💌 Цитата {i+1}", description=quote[:40]+"...",
-                input_message_content=InputTextMessageContent(message_text=f"<blockquote>{quote}</blockquote>", parse_mode="HTML")
-            ))
+            results.append(InlineQueryResultArticle(id=f"quote_{i}", title=f"💌 Цитата {i+1}", description=quote[:40]+"...", input_message_content=InputTextMessageContent(message_text=f"<blockquote><i>{quote}</i></blockquote>", parse_mode="HTML")))
 
-    # 4. Команды
-    commands = [
-        ("/дата 2026-12-31", "📅 Установить дату"),
-        ("/план Купить билеты", "📋 Добавить план"),
-        ("/вещь Паспорт", "🎒 Добавить вещь"),
-        ("/заметка Текст", "📝 Добавить заметку"),
-        ("/дни", "📊 Узнать дни"),
-        ("/удалить_план 1", "❌ Удалить план"),
-        ("/удалить_вещь 1", "❌ Удалить вещь"),
-        ("/удалить_заметку 1", "❌ Удалить заметку"),
-        ("/удалить_дату", "🗓 Удалить дату"),
-    ]
-    for cmd, desc in commands:
-        if text in cmd.lower() or text in desc.lower() or not text:
-            results.append(InlineQueryResultArticle(id=f"cmd_{cmd}", title=desc, description=f"Отправить: {cmd}", input_message_content=InputTextMessageContent(message_text=cmd)))
+    if "музыка" in text or not text:
+        results.append(InlineQueryResultArticle(id="music_res", title="🎵 Наша песня", description="Billie Eilish — i love you", input_message_content=InputTextMessageContent(message_text="🎵 Включи нашу песню в боте: /музыка")))
 
     await query.answer(results[:20], cache_time=1)
 
