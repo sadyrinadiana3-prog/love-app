@@ -17,11 +17,10 @@ DATA_FILE = "webapp_data.json"
 BOT_TOKEN = "9237588674:AAEfZD8JL9GIn5yC04kyn9Y-DZYU5k41aIw"
 SERVER_URL = "https://love-app-rb47.onrender.com"
 MINI_APP_URL = "https://t.me/anisha_disha_2026_bot/love_window"
+MUSIC_URL = "https://example.com/love.mp3"
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
-
-MUSIC_URL = "https://example.com/love.mp3" # ЗАМЕНИ НА СВОЮ ССЫЛКУ
 
 LOVE_QUOTES = [
     "«Любовь — это не то, что ты находишь. Любовь — это то, что находит тебя.»",
@@ -36,15 +35,11 @@ def load_data():
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     return {
-        "meet_date": None, 
-        "plans": [], 
-        "packing": [], 
-        "notes": [], 
+        "meet_date": None, "plans": [], "packing": [], "notes": [], 
         "custom_photo": "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg", 
         "title": "💖 Аниша и Диша 💖",
-        "bg_color": "#17212b",
-        "btn_color": "#2481cc",
-        "rel_date": None
+        "bg_color": "#17212b", "btn_color": "#2481cc", "rel_date": None,
+        "font_size": "22px", "font_style": "italic"
     }
 
 def save_data(data):
@@ -60,42 +55,31 @@ HTML_PAGE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root { --bg: #17212b; --card-bg: #232e3c; --btn: #2481cc; --text: #fff; }
+        :root { --bg: #17212b; --card-bg: #232e3c; --btn: #2481cc; --text: #fff; --font-size: 22px; --font-style: italic; }
         body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); padding: 15px; text-align: center; transition: 0.3s; }
         .card { background: var(--card-bg); border-radius: 15px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         img { width: 100%; border-radius: 10px; margin-bottom: 10px; max-height: 300px; object-fit: cover; }
         input, button { width: 100%; padding: 12px; margin: 5px 0; border-radius: 8px; border: none; font-size: 16px; box-sizing: border-box; }
         button { background: var(--btn); color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
         button:active { opacity: 0.8; transform: scale(0.98); }
-        .date-big { font-size: 22px; margin: 15px 0; color: #64b5f6; font-weight: bold; font-style: italic; }
+        .date-big { font-size: var(--font-size); margin: 15px 0; color: #64b5f6; font-weight: bold; font-style: var(--font-style); }
         .item { text-align: left; padding: 8px; background: rgba(255,255,255,0.1); margin: 5px 0; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
         .item.done { opacity: 0.5; text-decoration: line-through; }
         .del-btn { background: #e53935; width: auto; padding: 5px 10px; margin: 0 0 0 5px; font-size: 14px; }
         .done-btn { background: #43a047; width: auto; padding: 5px 10px; margin: 0; font-size: 14px; }
         h2 { font-style: italic; text-shadow: 0 0 10px rgba(255,255,255,0.2); }
         .stat-box { font-size: 18px; margin: 10px 0; }
+        .bottom-settings { border-top: 2px solid var(--btn); padding-top: 15px; margin-top: 20px; }
     </style>
 </head>
 <body>
+    <!-- ВЕРХНЯЯ ЧАСТЬ: ФОТО, ДАТЫ, ОТЧЕТ -->
     <div class="card">
         <img id="mainPhoto" src="#">
         <h2 id="appTitle"></h2>
         <div id="days" class="date-big">✈️ Загрузка...</div>
         <div id="relStats" class="stat-box"></div>
         <button onclick="showAlert()" style="background:#ff9800; margin-top:10px;">🔔 Показать уведомление</button>
-    </div>
-    
-    <div class="card">
-        <h3>🎨 Стиль</h3>
-        <input type="text" id="bgColor" placeholder="Цвет фона (например, #17212b)">
-        <input type="text" id="btnColor" placeholder="Цвет кнопок (например, #2481cc)">
-        <button onclick="changeStyle()">Применить стиль</button>
-    </div>
-
-    <div class="card">
-        <h3>🖼 Сменить фото</h3>
-        <input type="text" id="photoInput" placeholder="Ссылка на новую картинку...">
-        <button onclick="changePhoto()">Сохранить фото</button>
     </div>
 
     <div class="card">
@@ -125,6 +109,28 @@ HTML_PAGE = """
         <div id="notesList"></div>
         <input type="text" id="noteInput" placeholder="Новая заметка...">
         <button onclick="addNote()">Добавить заметку</button>
+    </div>
+
+    <!-- НИЖНЯЯ ЧАСТЬ: НАСТРОЙКИ -->
+    <div class="card bottom-settings">
+        <h3>🎨 Стиль и Настройки</h3>
+        
+        <p><b>Цвета:</b></p>
+        <input type="text" id="bgColor" placeholder="Цвет фона (например, #17212b)">
+        <input type="text" id="btnColor" placeholder="Цвет кнопок (например, #2481cc)">
+        
+        <p><b>Текст:</b></p>
+        <input type="text" id="fontSize" placeholder="Размер (например, 22px)">
+        <select id="fontStyle" style="width:100%; padding:12px; margin:5px 0; border-radius:8px; border:none; font-size:16px;">
+            <option value="normal">Обычный</option>
+            <option value="italic">Курсив</option>
+            <option value="bold">Жирный</option>
+        </select>
+        
+        <p><b>Фото:</b></p>
+        <input type="text" id="photoInput" placeholder="Ссылка на новую картинку...">
+        
+        <button onclick="applyAllSettings()" style="background:#4caf50;">Применить всё</button>
     </div>
 
     <script>
@@ -157,6 +163,8 @@ HTML_PAGE = """
             if (currentData.title) { document.getElementById('appTitle').innerText = currentData.title; }
             if (currentData.bg_color) document.documentElement.style.setProperty('--bg', currentData.bg_color);
             if (currentData.btn_color) document.documentElement.style.setProperty('--btn', currentData.btn_color);
+            if (currentData.font_size) document.documentElement.style.setProperty('--font-size', currentData.font_size);
+            if (currentData.font_style) document.documentElement.style.setProperty('--font-style', currentData.font_style);
             
             if (currentData.meet_date) {
                 let meet = new Date(currentData.meet_date); let today = new Date();
@@ -198,12 +206,16 @@ HTML_PAGE = """
 
         async function setDate() { let val = document.getElementById('dateInput').value; if (!val) return; currentData.meet_date = val; await saveData(); }
         async function setRelDate() { let val = document.getElementById('relDateInput').value; if (!val) return; currentData.rel_date = val; await saveData(); }
-        async function changePhoto() { let val = document.getElementById('photoInput').value; if (!val) return; currentData.custom_photo = val; await saveData(); }
-        async function changeStyle() { 
-            currentData.bg_color = document.getElementById('bgColor').value || currentData.bg_color;
-            currentData.btn_color = document.getElementById('btnColor').value || currentData.btn_color;
+        
+        async function applyAllSettings() { 
+            if (document.getElementById('bgColor').value) currentData.bg_color = document.getElementById('bgColor').value;
+            if (document.getElementById('btnColor').value) currentData.btn_color = document.getElementById('btnColor').value;
+            if (document.getElementById('fontSize').value) currentData.font_size = document.getElementById('fontSize').value;
+            currentData.font_style = document.getElementById('fontStyle').value;
+            if (document.getElementById('photoInput').value) currentData.custom_photo = document.getElementById('photoInput').value;
             await saveData(); 
         }
+        
         async function addPlan() { let val = document.getElementById('planInput').value; if (!val) return; currentData.plans.push({text: val, done: false}); document.getElementById('planInput').value = ''; await saveData(); }
         async function addPacking() { let val = document.getElementById('packingInput').value; if (!val) return; currentData.packing.push({text: val, done: false}); document.getElementById('packingInput').value = ''; await saveData(); }
         async function addNote() { let val = document.getElementById('noteInput').value; if (!val) return; currentData.notes.push({text: val, done: false}); document.getElementById('noteInput').value = ''; await saveData(); }
@@ -244,25 +256,29 @@ async def start(message: types.Message):
 async def help_cmd(message: types.Message):
     text = (
         "💖 <b>Все команды:</b>\n\n"
-        "🎵 /музыка — наша песня\n"
-        "📸 /фото — отправить фото\n"
-        "💌 /любовь — <i>цитата</i>\n"
-        "📅 /дата 2026-12-31\n"
-        "❤️ /отношения 2024-01-01\n"
-        "📊 /дни — уведомление\n"
-        "📋 /план Текст\n"
-        "🎒 /вещь Текст\n"
-        "📝 /заметка Текст\n"
-        "📋 /отчет\n"
-        "🏷 /название Новое имя\n\n"
+        "🎵 /музыка\n📸 /фото\n💌 /любовь\n"
+        "📅 /дата 2026-12-31\n❤️ /отношения 2024-01-01\n"
+        "📊 /дни\n📋 /план Текст\n🎒 /вещь Текст\n📝 /заметка Текст\n📋 /отчет\n"
+        "🏷 /название Имя\n"
+        "🎨 /стиль [цвет_фона] [цвет_кнопок] [размер_шрифта] [стиль]\n"
+        "   <i>Пример: /стиль #17212b #e91e63 24px italic</i>\n\n"
         "🗑 <b>Удаление:</b>\n"
-        "❌ /удалить_план 1\n"
-        "❌ /удалить_вещь 1\n"
-        "❌ /удалить_заметку 1\n"
-        "🗓 /удалить_дату\n"
-        "🗑 /очистить"
+        "❌ /удалить_план 1\n❌ /удалить_вещь 1\n❌ /удалить_заметку 1\n"
+        "🗓 /удалить_дату\n🗑 /очистить"
     )
     await message.answer(text, parse_mode="HTML")
+
+@dp.message(F.text.startswith("/стиль "))
+async def set_style(message: types.Message):
+    parts = message.text.replace("/стиль ", "").split(" ")
+    if len(parts) >= 4:
+        data = load_data()
+        data["bg_color"] = parts[0]
+        data["btn_color"] = parts[1]
+        data["font_size"] = parts[2]
+        data["font_style"] = parts[3]
+        save_data(data)
+        await message.answer("✅ Стиль обновлен!", parse_mode="HTML")
 
 @dp.message(F.text == "/музыка")
 async def music_cmd(message: types.Message):
@@ -272,9 +288,7 @@ async def music_cmd(message: types.Message):
 async def set_title(message: types.Message):
     new_title = message.text.replace("/название ", "").strip()
     if new_title:
-        data = load_data()
-        data["title"] = new_title
-        save_data(data)
+        data = load_data(); data["title"] = new_title; save_data(data)
         await message.answer(f"✅ Название изменено на: <i>{new_title}</i>", parse_mode="HTML")
 
 @dp.message(F.text == "/фото")
@@ -410,13 +424,12 @@ async def inline_handler(query: types.InlineQuery):
             meet = datetime.datetime.strptime(data["meet_date"], "%Y-%m-%d").date()
             report_text += f"✈️ До встречи: <b>{(meet - datetime.date.today()).days} дн.</b>\n"
         
-        # ДОБАВЛЕНЫ ЗАМЕТКИ СЮДА!
         report_text += "\n<blockquote><b>📋 Планы:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["plans"], 1)]) if data["plans"] else "  Пусто") + "</blockquote>"
         report_text += "\n<blockquote><b>🎒 Вещи:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["packing"], 1)]) if data["packing"] else "  Пусто") + "</blockquote>"
         report_text += "\n<blockquote><b>📝 Заметки:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["notes"], 1)]) if data["notes"] else "  Пусто") + "</blockquote>"
         
         photo_url = data.get("custom_photo") or "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg"
-        results.append(InlineQueryResultPhoto(id="report_photo", photo_url=photo_url, thumbnail_url=photo_url, title="📸 Фото + Отчет", description="Фото с отчетом и заметками", caption=report_text, parse_mode="HTML"))
+        results.append(InlineQueryResultPhoto(id="report_photo", photo_url=photo_url, thumbnail_url=photo_url, title="📸 Фото + Отчет", description="Фото с отчетом, планами и заметками", caption=report_text, parse_mode="HTML"))
 
     if "окно" in text or "ссылка" in text or not text:
         results.append(InlineQueryResultArticle(id="link_miniapp", title="💖 Открыть Mini App", description="Откроет окно в Telegram", input_message_content=InputTextMessageContent(message_text=f"💖 Наше окно (Mini App):\n{MINI_APP_URL}")))
@@ -425,9 +438,6 @@ async def inline_handler(query: types.InlineQuery):
     if "любовь" in text or not text:
         for i, quote in enumerate(LOVE_QUOTES):
             results.append(InlineQueryResultArticle(id=f"quote_{i}", title=f"💌 Цитата {i+1}", description=quote[:40]+"...", input_message_content=InputTextMessageContent(message_text=f"<blockquote><i>{quote}</i></blockquote>", parse_mode="HTML")))
-
-    if "музыка" in text or not text:
-        results.append(InlineQueryResultArticle(id="music_res", title="🎵 Наша песня", description="Billie Eilish — i love you", input_message_content=InputTextMessageContent(message_text="🎵 Включи нашу песню в боте: /музыка")))
 
     await query.answer(results[:20], cache_time=1)
 
