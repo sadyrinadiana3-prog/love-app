@@ -15,7 +15,7 @@ app = FastAPI()
 DATA_FILE = "webapp_data.json"
 
 BOT_TOKEN = "9237588674:AAEfZD8JL9GIn5yC04kyn9Y-DZYU5k41aIw"
-WEB_APP_URL = "https://love-app-rb47.onrender.com"
+WEB_APP_URL = "https://t.me/anisha_disha_2026_bot/love_window"
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
