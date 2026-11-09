@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
 from aiogram.types import (InlineKeyboardButton, WebAppInfo, InlineQueryResultArticle, 
-                           InputTextMessageContent, InlineKeyboardMarkup)
+                           InlineQueryResultPhoto, InputTextMessageContent, InlineKeyboardMarkup)
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import json
 import os
@@ -187,11 +187,13 @@ async def help_cmd(message: types.Message):
         "📝 /заметка Текст — добавить заметку\n"
         "📋 /отчет — полный список\n\n"
         "🗑 **Удаление:**\n"
-        "❌ /удалить_план 1 — удалить план\n"
-        "❌ /удалить_вещь 1 — удалить вещь\n"
-        "❌ /удалить_заметку 1 — удалить заметку\n"
-        "🗓 /удалить_дату — сбросить дату\n"
-        "🗑 /очистить — удалить всё"
+        "❌ /удалить_план 1\n"
+        "❌ /удалить_вещь 1\n"
+        "❌ /удалить_заметку 1\n"
+        "🗓 /удалить_дату\n"
+        "🗑 /очистить — всё сразу\n\n"
+        "🌐 **В чате с подругой:**\n"
+        "Напиши `@anisha_disha_2026_bot ` и выбери вариант."
     )
     await message.answer(text, parse_mode="Markdown")
 
@@ -257,7 +259,6 @@ async def report(message: types.Message):
     text += "\n\n📝 Заметки:\n" + ("\n".join([f"  {i}. {p}" for i, p in enumerate(data["notes"], 1)]) if data["notes"] else "  Пусто")
     await message.answer(text, parse_mode="Markdown")
 
-# --- УДАЛЕНИЕ ПО ОДНОМУ ---
 @dp.message(F.text.startswith("/удалить_план "))
 async def del_plan(message: types.Message):
     try:
@@ -266,7 +267,6 @@ async def del_plan(message: types.Message):
         if 0 <= idx < len(data["plans"]):
             removed = data["plans"].pop(idx); save_data(data)
             await message.answer(f"✅ Удален план: {removed}")
-        else: await message.answer("❌ Нет такого плана.")
     except: await message.answer("❌ Напиши номер: /удалить_план 1")
 
 @dp.message(F.text.startswith("/удалить_вещь "))
@@ -277,7 +277,6 @@ async def del_packing(message: types.Message):
         if 0 <= idx < len(data["packing"]):
             removed = data["packing"].pop(idx); save_data(data)
             await message.answer(f"✅ Удалена вещь: {removed}")
-        else: await message.answer("❌ Нет такой вещи.")
     except: await message.answer("❌ Напиши номер: /удалить_вещь 1")
 
 @dp.message(F.text.startswith("/удалить_заметку "))
@@ -288,14 +287,11 @@ async def del_note(message: types.Message):
         if 0 <= idx < len(data["notes"]):
             removed = data["notes"].pop(idx); save_data(data)
             await message.answer(f"✅ Удалена заметка: {removed}")
-        else: await message.answer("❌ Нет такой заметки.")
     except: await message.answer("❌ Напиши номер: /удалить_заметку 1")
 
 @dp.message(F.text == "/удалить_дату")
 async def del_date(message: types.Message):
-    data = load_data()
-    data["meet_date"] = None
-    save_data(data)
+    data = load_data(); data["meet_date"] = None; save_data(data)
     await message.answer("✅ Дата встречи удалена.")
 
 @dp.message(F.text == "/очистить")
@@ -305,18 +301,15 @@ async def clear_all(message: types.Message):
     save_data(data)
     await message.answer("✅ Все данные удалены.")
 
-# --- INLINE РЕЖИМ ---
+# --- INLINE РЕЖИМ (В ЧАТЕ С ПОДРУГОЙ) ---
 @dp.inline_query()
 async def inline_handler(query: types.InlineQuery):
     text = query.query.lower().strip()
     data = load_data()
     results = []
 
-    if "фото" in text or not text:
-        photo_url = data.get("custom_photo") or "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg"
-        results.append(InlineQueryResultArticle(id="photo_res", title="📸 Наше фото", description="Отправить фотографию", input_message_content=InputTextMessageContent(message_text=f"💖 Наша фоточка:\n{photo_url}")))
-
-    if "отчет" in text or not text:
+    # 1. Отчет + Фото (одним сообщением)
+    if "отчет" in text or "фото" in text or not text:
         report_text = "💖 **Наш отчет** 💖\n\n"
         if data.get("meet_date"):
             meet = datetime.datetime.strptime(data["meet_date"], "%Y-%m-%d").date()
@@ -324,32 +317,54 @@ async def inline_handler(query: types.InlineQuery):
         report_text += "\n📋 Планы:\n" + ("\n".join([f"  {i}. {p}" for i, p in enumerate(data["plans"], 1)]) if data["plans"] else "  Пусто")
         report_text += "\n\n🎒 Вещи:\n" + ("\n".join([f"  {i}. {p}" for i, p in enumerate(data["packing"], 1)]) if data["packing"] else "  Пусто")
         report_text += "\n\n📝 Заметки:\n" + ("\n".join([f"  {i}. {p}" for i, p in enumerate(data["notes"], 1)]) if data["notes"] else "  Пусто")
-        results.append(InlineQueryResultArticle(id="report_res", title="📊 Наш отчет", description="Дата, планы, вещи, заметки", input_message_content=InputTextMessageContent(message_text=report_text, parse_mode="Markdown")))
+        
+        photo_url = data.get("custom_photo") or "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg"
+        
+        # Отправляем как фото с подписью (отчет)
+        results.append(InlineQueryResultPhoto(
+            id="report_photo",
+            photo_url=photo_url,
+            thumbnail_url=photo_url,
+            title="📸 Фото + Отчет",
+            description="Наше фото с полным отчетом",
+            caption=report_text,
+            parse_mode="Markdown"
+        ))
 
+    # 2. Ссылка на окно (вместо кнопки)
+    if "окно" in text or not text:
+        results.append(InlineQueryResultArticle(
+            id="open_app_link",
+            title="💖 Ссылка на наше окно",
+            description="Нажми, чтобы скопировать и открыть в браузере",
+            input_message_content=InputTextMessageContent(
+                message_text=f"💖 Наше окно: {WEB_APP_URL}\n\nСкопируй ссылку и открой в браузере (или нажми в боте)."
+            )
+        ))
+
+    # 3. Цитаты
     if "любовь" in text or not text:
         for i, quote in enumerate(LOVE_QUOTES):
-            results.append(InlineQueryResultArticle(id=f"quote_{i}", title=f"💌 Цитата {i+1}", description=quote[:40]+"...", input_message_content=InputTextMessageContent(message_text=f"<blockquote>{quote}</blockquote>", parse_mode="HTML")))
+            results.append(InlineQueryResultArticle(
+                id=f"quote_{i}", title=f"💌 Цитата {i+1}", description=quote[:40]+"...",
+                input_message_content=InputTextMessageContent(message_text=f"<blockquote>{quote}</blockquote>", parse_mode="HTML")
+            ))
 
+    # 4. Команды
     commands = [
         ("/дата 2026-12-31", "📅 Установить дату"),
         ("/план Купить билеты", "📋 Добавить план"),
         ("/вещь Паспорт", "🎒 Добавить вещь"),
         ("/заметка Текст", "📝 Добавить заметку"),
         ("/дни", "📊 Узнать дни"),
-        ("/удалить_план 1", "❌ Удалить план по номеру"),
-        ("/удалить_вещь 1", "❌ Удалить вещь по номеру"),
-        ("/удалить_заметку 1", "❌ Удалить заметку по номеру"),
+        ("/удалить_план 1", "❌ Удалить план"),
+        ("/удалить_вещь 1", "❌ Удалить вещь"),
+        ("/удалить_заметку 1", "❌ Удалить заметку"),
         ("/удалить_дату", "🗓 Удалить дату"),
     ]
     for cmd, desc in commands:
         if text in cmd.lower() or text in desc.lower() or not text:
             results.append(InlineQueryResultArticle(id=f"cmd_{cmd}", title=desc, description=f"Отправить: {cmd}", input_message_content=InputTextMessageContent(message_text=cmd)))
-
-    if "окно" in text or not text:
-        results.append(InlineQueryResultArticle(
-            id="open_app", title="💖 Открыть наше окно", description="Фото и планы",
-            input_message_content=InputTextMessageContent(message_text="Нажми на кнопку ниже, чтобы открыть окно.", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Открыть", web_app=WebAppInfo(url=WEB_APP_URL))]]))
-        ))
 
     await query.answer(results[:20], cache_time=1)
 
