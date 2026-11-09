@@ -18,7 +18,9 @@ def save_data(data):
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    with open("index.html", "r", encoding="utf-8") as f:
+    # Эта строка говорит серверу искать index.html в той же папке, где лежит main.py
+    file_path = os.path.join(os.path.dirname(__file__), "index.html")
+    with open(file_path, "r", encoding="utf-8") as f:
         return f.read()
 
 @app.get("/api/data")
