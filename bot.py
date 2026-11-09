@@ -9,9 +9,8 @@ import os
 import datetime
 
 BOT_TOKEN = "9237588674:AAEfZD8JL9GIn5yC04kyn9Y-DZYU5k41aIw"
-# ВАЖНО: Сюда мы потом вставим ссылку от Render. Пока оставь так.
-WEB_APP_URL = "https://great-horses-worry.loca.lt" 
-
+# ВАЖНО: Сюда мы потом вставим ссылку от Render. Пока оставвстак
+WEB_APP_URL = "https://love-app-rb47.onrender.com"
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
