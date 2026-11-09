@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { font-family: sans-serif; background: var(--tg-theme-bg-color, #17212b); color: var(--tg-theme-text-color, #fff); padding: 15px; text-align: center; }
+        .card { background: var(--tg-theme-secondary-bg-color, #232e3c); border-radius: 15px; padding: 15px; margin-bottom: 15px; }
+        img { width: 100%; border-radius: 10px; margin-bottom: 10px; max-height: 300px; object-fit: cover; }
+        input, button { width: 100%; padding: 12px; margin: 5px 0; border-radius: 8px; border: none; font-size: 16px; box-sizing: border-box; }
+        button { background: #2481cc; color: white; font-weight: bold; cursor: pointer; }
+        button:active { background: #1a5f99; }
+        .plan-item { text-align: left; margin: 5px 0; padding: 8px; background: rgba(255,255,255,0.1); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .delete-btn { background: #e53935; width: auto; padding: 5px 10px; margin: 0; font-size: 14px; }
+        .date-big { font-size: 22px; margin: 15px 0; color: #64b5f6; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <img id="mainPhoto" src="https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg">
+        <h2>💖 Аниша и Диша 💖</h2>
+        <div id="days" class="date-big">✈️ Загрузка...</div>
+        <button onclick="showAlert()" style="background:#ff9800; margin-top:10px;">🔔 Показать уведомление</button>
+    </div>
+
+    <div class="card">
+        <h3>🖼 Сменить фото</h3>
+        <input type="text" id="photoInput" placeholder="Ссылка на новую картинку...">
+        <button onclick="changePhoto()">Сохранить фото</button>
+    </div>
+
+    <div class="card">
+        <h3>📅 Дата встречи</h3>
+        <input type="date" id="dateInput">
+        <button onclick="setDate()">Сохранить дату</button>
+    </div>
+
+    <div class="card">
+        <h3>📋 Планы</h3>
+        <div id="plansList"></div>
+        <input type="text" id="planInput" placeholder="Новый план...">
+        <button onclick="addPlan()">Добавить план</button>
+    </div>
+
+    <script>
+        let tg = window.Telegram.WebApp;
+        tg.expand();
+        let currentData = {};
+
+        function showAlert() {
+            if (currentData.meet_date) {
+                let meet = new Date(currentData.meet_date);
+                let today = new Date();
+                let diff = Math.ceil((meet - today) / (1000 * 60 * 60 * 24));
+                tg.showAlert(`💖 До встречи осталось: ${diff} дн.!`);
+            } else {
+                tg.showAlert("💖 Дата встречи не задана");
+            }
+        }
+
+        async function loadData() {
+            let res = await fetch('/api/data');
+            currentData = await res.json();
+            updateUI();
+        }
+
+        function updateUI() {
+            if (currentData.meet_date) {
+                let meet = new Date(currentData.meet_date);
+                let today = new Date();
+                let diff = Math.ceil((meet - today) / (1000 * 60 * 60 * 24));
+                document.getElementById('days').innerText = `✈️ До встречи: ${diff} дн.`;
+                document.getElementById('dateInput').value = currentData.meet_date;
+            } else {
+                document.getElementById('days').innerText = "✈️ Дата не задана";
+            }
+
+            if (currentData.custom_photo) {
+                document.getElementById('mainPhoto').src = currentData.custom_photo;
+            }
+
+            let list = document.getElementById('plansList');
+            list.innerHTML = '';
+            currentData.plans.forEach((p, index) => {
+                let div = document.createElement('div');
+                div.className = 'plan-item';
+                let span = document.createElement('span');
+                span.innerText = "🔸 " + p;
+                let btn = document.createElement('button');
+                btn.innerText = "❌";
+                btn.className = 'delete-btn';
+                btn.onclick = () => deletePlan(index);
+                div.appendChild(span);
+                div.appendChild(btn);
+                list.appendChild(div);
+            });
+        }
+
+        async function setDate() {
+            let val = document.getElementById('dateInput').value;
+            if (!val) return;
+            currentData.meet_date = val;
+            await saveData();
+        }
+
+        async function changePhoto() {
+            let val = document.getElementById('photoInput').value;
+            if (!val) return;
+            currentData.custom_photo = val;
+            await saveData();
+        }
+
+        async function addPlan() {
+            let val = document.getElementById('planInput').value;
+            if (!val) return;
+            currentData.plans.push(val);
+            document.getElementById('planInput').value = '';
+            await saveData();
+        }
+
+        async function deletePlan(index) {
+            currentData.plans.splice(index, 1);
+            await saveData();
+        }
+
+        async function saveData() {
+            await fetch('/api/data', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(currentData)
+            });
+            updateUI();
+        }
+
+        loadData();
+    </script>
+</body>
+</html>
