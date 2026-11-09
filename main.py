@@ -1,11 +1,34 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.filters import CommandStart
+from aiogram.types import InlineKeyboardButton, WebAppInfo
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.client.session.aiohttp import AiohttpSession
 import json
 import os
+import asyncio
+import datetime
+import random
 
 app = FastAPI()
 DATA_FILE = "webapp_data.json"
 
+# --- НАСТРОЙКИ БОТА ---
+BOT_TOKEN = "9237588674:AAEfZD8JL9GIn5yC04kyn9Y-DZYU5k41aIw"
+WEB_APP_URL = "https://love-app-rb47.onrender.com"
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+LOVE_QUOTES = [
+    "«Любовь — это не то, что ты находишь. Любовь — это то, что находит тебя.»",
+    "«Мы выбираем, нас выбирают, Как это часто не совпадает!»",
+    "«Одним взглядом можно убить любовь, одним же взглядом можно воскресить ее.» — Уильям Шекспир",
+    "«Тоска по любви есть сама любовь.» — Жан Поль",
+    "«Я люблю тебя не за то, кто ты, а за то, кто я, когда я с тобой.» — Маркес"
+]
+
+# --- ФУНКЦИИ ДЛЯ САЙТА ---
 def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
@@ -61,8 +84,7 @@ HTML_PAGE = """
             } else { tg.showAlert("💖 Дата встречи не задана"); }
         }
         async function loadData() {
-            let res = await fetch('/api/data');
-            currentData = await res.json(); updateUI();
+            let res = await fetch('/api/data'); currentData = await res.json(); updateUI();
         }
         function updateUI() {
             if (currentData.meet_date) {
@@ -107,10 +129,49 @@ async def get_data():
 async def update_data(data: dict):
     save_data(data)
     return {"status": "ok"}
-    import subprocess
-import threading
 
-def run_bot():
-    subprocess.run(["python", "bot.py"])
+# --- КОМАНДЫ БОТА ---
+@dp.message(CommandStart())
+async def start(message: types.Message):
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="💖 Открыть наше окно", web_app=WebAppInfo(url=WEB_APP_URL)))
+    await message.answer("Привет! Нажми на кнопку ниже, чтобы открыть наше общее окно.", reply_markup=builder.as_markup())
 
-threading.Thread(target=run_bot, daemon=True).start()
+@dp.message(F.text == "/любовь")
+async def love_cmd(message: types.Message):
+    quote = random.choice(LOVE_QUOTES)
+    await message.answer(f"<blockquote>{quote}</blockquote>", parse_mode="HTML")
+
+@dp.message(F.text.startswith("/дата "))
+async def set_date(message: types.Message):
+    try:
+        dt = message.text.replace("/дата ", "").strip()
+        datetime.datetime.strptime(dt, "%Y-%m-%d")
+        data = load_data(); data["meet_date"] = dt; save_data(data)
+        await message.answer(f"✅ Дата установлена: {dt}")
+    except: await message.answer("❌ Формат: /дата 2026-12-31")
+
+@dp.message(F.text.startswith("/план "))
+async def add_plan(message: types.Message):
+    plan = message.text.replace("/план ", "").strip()
+    if plan:
+        data = load_data(); data["plans"].append(plan); save_data(data)
+        await message.answer(f"✅ План добавлен: {plan}")
+
+@dp.message(F.text == "/отчет")
+async def report(message: types.Message):
+    data = load_data()
+    text = "💖 **Отчет** 💖\n\n"
+    if data.get("meet_date"):
+        meet = datetime.datetime.strptime(data["meet_date"], "%Y-%m-%d").date()
+        text += f"✈️ До встречи: {(meet - datetime.date.today()).days} дн.\n"
+    text += "\n📋 Планы:\n" + ("\n".join([f"  {i}. {p}" for i, p in enumerate(data["plans"], 1)]) if data["plans"] else "  Пусто")
+    await message.answer(text, parse_mode="Markdown")
+
+# --- ЗАПУСК БОТА В ФОНЕ ---
+async def run_bot():
+    await dp.start_polling(bot)
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(run_bot())
