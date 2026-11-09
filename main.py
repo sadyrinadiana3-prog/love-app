@@ -2,7 +2,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
-from aiogram.types import InlineKeyboardButton, WebAppInfo, InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardMarkup
+from aiogram.types import (InlineKeyboardButton, WebAppInfo, InlineQueryResultArticle, 
+                           InputTextMessageContent, InlineKeyboardMarkup)
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import json
 import os
@@ -37,7 +38,7 @@ def save_data(data):
         json.dump(data, f, ensure_ascii=False)
 
 # --- САЙТ (ОКНО) ---
-HTML_PAGE = """
+HTML_PAGE = """ 
 <!DOCTYPE html>
 <html>
 <head>
@@ -184,9 +185,12 @@ async def help_cmd(message: types.Message):
         "📋 /план Текст — добавить план\n"
         "🎒 /вещь Текст — добавить вещь\n"
         "📝 /заметка Текст — добавить заметку\n"
-        "📋 /отчет — полный список\n"
+        "📋 /отчет — полный список\n\n"
+        "🗑 **Удаление:**\n"
         "❌ /удалить_план 1 — удалить план\n"
         "❌ /удалить_вещь 1 — удалить вещь\n"
+        "❌ /удалить_заметку 1 — удалить заметку\n"
+        "🗓 /удалить_дату — сбросить дату\n"
         "🗑 /очистить — удалить всё"
     )
     await message.answer(text, parse_mode="Markdown")
@@ -201,11 +205,6 @@ async def photo_cmd(message: types.Message):
 async def love_cmd(message: types.Message):
     quote = random.choice(LOVE_QUOTES)
     await message.answer(f"<blockquote>{quote}</blockquote>", parse_mode="HTML")
-
-@dp.message(F.text.startswith("/цитата "))
-async def custom_quote(message: types.Message):
-    text = message.text.replace("/цитата ", "")
-    await message.answer(f"<blockquote>{text}</blockquote>", parse_mode="HTML")
 
 @dp.message(F.text.startswith("/дата "))
 async def set_date(message: types.Message):
@@ -258,6 +257,7 @@ async def report(message: types.Message):
     text += "\n\n📝 Заметки:\n" + ("\n".join([f"  {i}. {p}" for i, p in enumerate(data["notes"], 1)]) if data["notes"] else "  Пусто")
     await message.answer(text, parse_mode="Markdown")
 
+# --- УДАЛЕНИЕ ПО ОДНОМУ ---
 @dp.message(F.text.startswith("/удалить_план "))
 async def del_plan(message: types.Message):
     try:
@@ -265,7 +265,8 @@ async def del_plan(message: types.Message):
         data = load_data()
         if 0 <= idx < len(data["plans"]):
             removed = data["plans"].pop(idx); save_data(data)
-            await message.answer(f"✅ Удален: {removed}")
+            await message.answer(f"✅ Удален план: {removed}")
+        else: await message.answer("❌ Нет такого плана.")
     except: await message.answer("❌ Напиши номер: /удалить_план 1")
 
 @dp.message(F.text.startswith("/удалить_вещь "))
@@ -275,8 +276,27 @@ async def del_packing(message: types.Message):
         data = load_data()
         if 0 <= idx < len(data["packing"]):
             removed = data["packing"].pop(idx); save_data(data)
-            await message.answer(f"✅ Удалена: {removed}")
+            await message.answer(f"✅ Удалена вещь: {removed}")
+        else: await message.answer("❌ Нет такой вещи.")
     except: await message.answer("❌ Напиши номер: /удалить_вещь 1")
+
+@dp.message(F.text.startswith("/удалить_заметку "))
+async def del_note(message: types.Message):
+    try:
+        idx = int(message.text.replace("/удалить_заметку ", "").strip()) - 1
+        data = load_data()
+        if 0 <= idx < len(data["notes"]):
+            removed = data["notes"].pop(idx); save_data(data)
+            await message.answer(f"✅ Удалена заметка: {removed}")
+        else: await message.answer("❌ Нет такой заметки.")
+    except: await message.answer("❌ Напиши номер: /удалить_заметку 1")
+
+@dp.message(F.text == "/удалить_дату")
+async def del_date(message: types.Message):
+    data = load_data()
+    data["meet_date"] = None
+    save_data(data)
+    await message.answer("✅ Дата встречи удалена.")
 
 @dp.message(F.text == "/очистить")
 async def clear_all(message: types.Message):
@@ -285,48 +305,50 @@ async def clear_all(message: types.Message):
     save_data(data)
     await message.answer("✅ Все данные удалены.")
 
-# --- БОТ (INLINE РЕЖИМ) ---
+# --- INLINE РЕЖИМ ---
 @dp.inline_query()
 async def inline_handler(query: types.InlineQuery):
     text = query.query.lower().strip()
     data = load_data()
     results = []
 
-    commands = [
-        ("/помощь", "📖 Список всех команд"),
-        ("/любовь", "💌 Случайная цитата"),
-        ("/отчет", "📊 Показать списки"),
-        ("/дни", "📅 Сколько дней осталось"),
-        ("/дата 2026-12-31", "📅 Установить дату"),
-        ("/план Купить билеты", "📋 Добавить план"),
-        ("/вещь Паспорт", "🎒 Добавить вещь"),
-        ("/заметка Текст", "📝 Добавить заметку"),
-    ]
-    
-    for cmd, desc in commands:
-        if text in cmd.lower() or text in desc.lower() or not text:
-            results.append(InlineQueryResultArticle(id=f"cmd_{cmd}", title=desc, description=f"Отправить: {cmd}", input_message_content=InputTextMessageContent(message_text=cmd)))
+    if "фото" in text or not text:
+        photo_url = data.get("custom_photo") or "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg"
+        results.append(InlineQueryResultArticle(id="photo_res", title="📸 Наше фото", description="Отправить фотографию", input_message_content=InputTextMessageContent(message_text=f"💖 Наша фоточка:\n{photo_url}")))
 
-    if "план" in text or not text:
-        for i, plan in enumerate(data["plans"]):
-            results.append(InlineQueryResultArticle(id=f"plan_{i}", title=f"📋 {plan}", description="План", input_message_content=InputTextMessageContent(message_text=f"📋 Наш план: {plan}")))
-
-    if "вещь" in text or not text:
-        for i, item in enumerate(data["packing"]):
-            results.append(InlineQueryResultArticle(id=f"pack_{i}", title=f"🎒 {item}", description="Вещь в поездку", input_message_content=InputTextMessageContent(message_text=f"🎒 Взять: {item}")))
-
-    if "заметка" in text or not text:
-        for i, note in enumerate(data["notes"]):
-            results.append(InlineQueryResultArticle(id=f"note_{i}", title=f"📝 {note}", description="Заметка", input_message_content=InputTextMessageContent(message_text=f"📝 Заметка: {note}")))
+    if "отчет" in text or not text:
+        report_text = "💖 **Наш отчет** 💖\n\n"
+        if data.get("meet_date"):
+            meet = datetime.datetime.strptime(data["meet_date"], "%Y-%m-%d").date()
+            report_text += f"✈️ До встречи: {(meet - datetime.date.today()).days} дн.\n"
+        report_text += "\n📋 Планы:\n" + ("\n".join([f"  {i}. {p}" for i, p in enumerate(data["plans"], 1)]) if data["plans"] else "  Пусто")
+        report_text += "\n\n🎒 Вещи:\n" + ("\n".join([f"  {i}. {p}" for i, p in enumerate(data["packing"], 1)]) if data["packing"] else "  Пусто")
+        report_text += "\n\n📝 Заметки:\n" + ("\n".join([f"  {i}. {p}" for i, p in enumerate(data["notes"], 1)]) if data["notes"] else "  Пусто")
+        results.append(InlineQueryResultArticle(id="report_res", title="📊 Наш отчет", description="Дата, планы, вещи, заметки", input_message_content=InputTextMessageContent(message_text=report_text, parse_mode="Markdown")))
 
     if "любовь" in text or not text:
         for i, quote in enumerate(LOVE_QUOTES):
             results.append(InlineQueryResultArticle(id=f"quote_{i}", title=f"💌 Цитата {i+1}", description=quote[:40]+"...", input_message_content=InputTextMessageContent(message_text=f"<blockquote>{quote}</blockquote>", parse_mode="HTML")))
 
+    commands = [
+        ("/дата 2026-12-31", "📅 Установить дату"),
+        ("/план Купить билеты", "📋 Добавить план"),
+        ("/вещь Паспорт", "🎒 Добавить вещь"),
+        ("/заметка Текст", "📝 Добавить заметку"),
+        ("/дни", "📊 Узнать дни"),
+        ("/удалить_план 1", "❌ Удалить план по номеру"),
+        ("/удалить_вещь 1", "❌ Удалить вещь по номеру"),
+        ("/удалить_заметку 1", "❌ Удалить заметку по номеру"),
+        ("/удалить_дату", "🗓 Удалить дату"),
+    ]
+    for cmd, desc in commands:
+        if text in cmd.lower() or text in desc.lower() or not text:
+            results.append(InlineQueryResultArticle(id=f"cmd_{cmd}", title=desc, description=f"Отправить: {cmd}", input_message_content=InputTextMessageContent(message_text=cmd)))
+
     if "окно" in text or not text:
         results.append(InlineQueryResultArticle(
-            id="open_app", title="💖 Открыть окно", description="Фото и планы",
-            input_message_content=InputTextMessageContent(message_text="Нажми на кнопку ниже", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Открыть", web_app=WebAppInfo(url=WEB_APP_URL))]]))
+            id="open_app", title="💖 Открыть наше окно", description="Фото и планы",
+            input_message_content=InputTextMessageContent(message_text="Нажми на кнопку ниже, чтобы открыть окно.", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Открыть", web_app=WebAppInfo(url=WEB_APP_URL))]]))
         ))
 
     await query.answer(results[:20], cache_time=1)
