@@ -1,3 +1,5 @@
+
+import os 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from aiogram import Bot, Dispatcher, types, F
@@ -16,7 +18,7 @@ from sqlalchemy import select
 
 app = FastAPI()
 
-BOT_TOKEN = "9237588674:AAEfZD8JL9GIn5yC04kyn9Y-DZYU5k41aIw"
+BOT_TOKEN = "BOT_TOKEN = os.getenv("BOT_TOKEN")"
 SERVER_URL = "https://love-app-rb47.onrender.com"
 MINI_APP_URL = "https://t.me/anisha_disha_2026_bot/love_window"
 MUSIC_URL = "https://example.com/love.mp3"

@@ -1,10 +1,10 @@
+import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy import Column, Integer, String, JSON
 
 # Твоя ссылка подключения (с добавленным +asyncpg)
-DATABASE_URL = "postgresql+asyncpg://kaiki_c_6f31aa45b9def0ef010b6f20:Kk1!1DpGqiRLIY7rKvdvPAqv2VFUYUU1@ep-aeeaa01eba61.kaiki.ru:5432/love-app-db?sslmode=require"
-
+DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_async_engine(DATABASE_URL, echo=False)
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 Base = declarative_base()
