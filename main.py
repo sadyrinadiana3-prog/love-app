@@ -1,5 +1,3 @@
-
-import os 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from aiogram import Bot, Dispatcher, types, F
@@ -11,26 +9,37 @@ import datetime
 import random
 import asyncio
 import uuid
+import os
+import logging
 
-# Импорт нашей базы данных
 from database import init_db, async_session, Couple
 from sqlalchemy import select
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 app = FastAPI()
-BOT_TOKEN = os.getenv("BOT_TOKEN") 
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 SERVER_URL = "https://love-app-rb47.onrender.com"
-MINI_APP_URL = "https://t.me/anisha_disha_2026_bot/love_window"
 MUSIC_URL = "https://example.com/love.mp3"
 
-bot = Bot(token=BOT_TOKEN)
+if not BOT_TOKEN:
+    logger.error("КРИТИЧЕСКАЯ ОШИБКА: BOT_TOKEN не найден!")
+else:
+    logger.info("Токен успешно загружен.")
+
+bot = Bot(token=BOT_TOKEN if BOT_TOKEN else "123:fake")
 dp = Dispatcher()
 
 LOVE_QUOTES = [
-    "«Любовь — это не то, что ты находишь. Любовь — это то, что находит тебя.»",
-    "«Мы выбираем, нас выбирают, Как это часто не совпадает!»",
-    "«Одним взглядом можно убить любовь, одним же взглядом можно воскресить ее.» — <i>Уильям Шекспир</i>",
-    "«Тоска по любви есть сама любовь.» — <i>Жан Поль</i>",
-    "«Я люблю тебя не за то, кто ты, а за то, кто я, когда я с тобой.» — <i>Маркес</i>"
+    "«Расстояние — причина для боли, но не причина для измен.»",
+    "«Для честной любви даже самое маленькое расстояние — слишком большое, но даже самое большое расстояние — преодолимо.»",
+    "«Говорят, любовь на расстоянии невозможна. Солнце тоже далеко… но всё же греет.»",
+    "«Даже тот, кто далеко, стоит рядом, если он в твоем сердце.»",
+    "«Расстояние — ничто, когда веришь друг в друга.»",
+    "«Любовь на расстоянии, как искра на ветру — слабую она гасит, а сильную разжигает.»",
+    "«Когда по-настоящему любишь, то расстояний не существует.»"
 ]
 
 # --- РАБОТА С БАЗОЙ ---
@@ -44,7 +53,7 @@ async def get_user_couple(user_id: int, create_if_missing=True):
             couple = Couple(user1_id=user_id, invite_code=new_code, data_json={
                 "meet_date": None, "plans": [], "packing": [], "notes": [], 
                 "custom_photo": "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg", 
-                "title": "💖 Дина и Аниша 💖", # <-- Изменено начальное название
+                "title": "💖 Дина и Аниша 💖",
                 "bg_color": "#17212b", "btn_color": "#2481cc", 
                 "rel_date": None, "font_size": "22px", "font_style": "italic"
             })
@@ -85,6 +94,10 @@ HTML_PAGE = """
         h2 { font-style: italic; text-shadow: 0 0 10px rgba(255,255,255,0.2); }
         .stat-box { font-size: 18px; margin: 10px 0; }
         .bottom-settings { border-top: 2px solid var(--btn); padding-top: 15px; margin-top: 20px; }
+        .palette { display: flex; gap: 5px; flex-wrap: wrap; margin: 10px 0; justify-content: center; }
+        .color-dot { width: 30px; height: 30px; border-radius: 50%; border: 2px solid white; cursor: pointer; }
+        .color-dot:active { transform: scale(0.9); }
+        .danger-btn { background: #e53935; margin-top: 20px; }
     </style>
 </head>
 <body>
@@ -122,14 +135,18 @@ HTML_PAGE = """
     </div>
     <div class="card bottom-settings">
         <h3>🎨 Стиль и Настройки</h3>
-        <!-- ДОБАВЛЕНО ПОЛЕ ДЛЯ НАЗВАНИЯ -->
         <p><b>Название окна:</b></p>
         <input type="text" id="titleInput" placeholder="Например: Дина и Аниша">
         <button onclick="updateTitle()" style="background:#ff9800;">Изменить название</button>
         
-        <p><b>Цвета:</b></p>
-        <input type="text" id="bgColor" placeholder="Цвет фона (например, #17212b)">
-        <input type="text" id="btnColor" placeholder="Цвет кнопок (например, #2481cc)">
+        <p><b>Цвет фона:</b></p>
+        <div class="palette" id="bgPalette"></div>
+        <input type="text" id="bgColor" placeholder="Или введи вручную">
+        
+        <p><b>Цвет кнопок:</b></p>
+        <div class="palette" id="btnPalette"></div>
+        <input type="text" id="btnColor" placeholder="Или введи вручную">
+        
         <p><b>Текст:</b></p>
         <input type="text" id="fontSize" placeholder="Размер (например, 22px)">
         <select id="fontStyle" style="width:100%; padding:12px; margin:5px 0; border-radius:8px; border:none; font-size:16px;">
@@ -140,12 +157,28 @@ HTML_PAGE = """
         <p><b>Фото:</b></p>
         <input type="text" id="photoInput" placeholder="Ссылка на новую картинку...">
         <button onclick="applyAllSettings()" style="background:#4caf50;">Применить всё</button>
+        <button onclick="unlinkPartner()" class="danger-btn">🗑 Отвязать партнёра</button>
     </div>
     <script>
         let tg = window.Telegram.WebApp; tg.expand();
         let currentData = {};
         let alertShown = false;
         let userId = tg.initDataUnsafe?.user?.id || 0;
+
+        const colors = ['#17212b', '#000000', '#1e3a5f', '#2e4a62', '#4a2e62', '#623a4a', '#2e6244', '#ffffff', '#e91e63', '#ff9800', '#4caf50', '#2481cc'];
+        
+        function renderPalette(containerId, inputId) {
+            const container = document.getElementById(containerId);
+            colors.forEach(color => {
+                const dot = document.createElement('div');
+                dot.className = 'color-dot';
+                dot.style.backgroundColor = color;
+                dot.onclick = () => { document.getElementById(inputId).value = color; };
+                container.appendChild(dot);
+            });
+        }
+        renderPalette('bgPalette', 'bgColor');
+        renderPalette('btnPalette', 'btnColor');
 
         function showAlert() {
             if (currentData.meet_date) {
@@ -171,7 +204,7 @@ HTML_PAGE = """
         function updateUI() {
             if (currentData.title) { 
                 document.getElementById('appTitle').innerText = currentData.title; 
-                document.getElementById('titleInput').value = currentData.title; // Заполняем поле названия
+                document.getElementById('titleInput').value = currentData.title;
             }
             if (currentData.bg_color) document.documentElement.style.setProperty('--bg', currentData.bg_color);
             if (currentData.btn_color) document.documentElement.style.setProperty('--btn', currentData.btn_color);
@@ -211,15 +244,20 @@ HTML_PAGE = """
             renderList('notesList', formatArr(currentData.notes), 'notes');
         }
 
-        // НОВАЯ ФУНКЦИЯ ДЛЯ ИЗМЕНЕНИЯ НАЗВАНИЯ
         async function updateTitle() {
             let newTitle = document.getElementById('titleInput').value;
             if (newTitle.trim()) {
                 currentData.title = newTitle;
                 await saveData();
                 tg.showAlert("✅ Название успешно изменено!");
-            } else {
-                tg.showAlert("❌ Название не может быть пустым.");
+            } else { tg.showAlert("❌ Название не может быть пустым."); }
+        }
+
+        async function unlinkPartner() {
+            if (confirm("Вы уверены, что хотите отвязать партнёра? Все общие данные останутся у вас.")) {
+                await fetch(`/api/unlink?user_id=${userId}`, { method: 'POST' });
+                tg.showAlert("✅ Партнёр отвязан.");
+                loadData();
             }
         }
 
@@ -264,6 +302,20 @@ async def update_data(data: dict, user_id: int):
     await update_couple_data(couple.id, data)
     return {"status": "ok"}
 
+@app.post("/api/unlink")
+async def unlink_partner(user_id: int):
+    async with async_session() as session:
+        result = await session.execute(select(Couple).where((Couple.user1_id == user_id) | (Couple.user2_id == user_id)))
+        couple = result.scalar_one_or_none()
+        if couple:
+            if couple.user1_id == user_id:
+                couple.user1_id = couple.user2_id
+                couple.user2_id = None
+            else:
+                couple.user2_id = None
+            await session.commit()
+    return {"status": "ok"}
+
 # --- БОТ (КОМАНДЫ) ---
 @dp.message(CommandStart(deep_link=True))
 async def start_with_code(message: types.Message, command: CommandObject):
@@ -293,7 +345,6 @@ async def start(message: types.Message):
     builder.row(InlineKeyboardButton(text="💖 Открыть наше окно", web_app=WebAppInfo(url=SERVER_URL)))
     await message.answer(f"Привет! Твой код приглашения для партнера:\n<code>{couple.invite_code}</code>\n\nСкинь его партнеру или отправь ссылку:\nhttps://t.me/{(await bot.get_me()).username}?start={couple.invite_code}\n\nЕсли не знаешь, что делать, напиши /гайд", reply_markup=builder.as_markup(), parse_mode="HTML")
 
-# --- НОВАЯ КОМАНДА ГАЙД ---
 @dp.message(F.text == "/гайд")
 async def guide(message: types.Message):
     text = (
@@ -308,7 +359,7 @@ async def guide(message: types.Message):
         "💻 <b>2. Как открыть Mini App (Окно)?</b>\n"
         "• Нажми на кнопку <b>«💖 Открыть наше окно»</b> под любым сообщением бота.\n"
         "• Внутри окна ты можешь добавлять планы, вещи в поездку и заметки. Все изменения мгновенно сохраняются и видны партнеру.\n"
-        "• Внизу окна есть настройки: можно поменять цвета, шрифт, картинку и <b>название окна</b> (например, написать имена)!\n\n"
+        "• Внизу окна есть настройки: можно поменять цвета (есть палитра!), шрифт, картинку и <b>название окна</b> (например, написать имена)!\n\n"
         
         "🛠 <b>3. Основные команды бота:</b>\n"
         "📅 /дата 2026-12-31 — установить дату встречи (бот будет считать дни).\n"
@@ -321,11 +372,12 @@ async def guide(message: types.Message):
         "🏷 /название Дина и Аниша — изменить заголовок в окне.\n"
         "🎨 /стиль #17212b #e91e63 24px italic — изменить дизайн окна.\n\n"
         
-        "🗑 <b>4. Удаление:</b>\n"
+        "🗑 <b>4. Удаление и отвязка:</b>\n"
         "❌ /удалить_план 1 (где 1 — это номер плана в списке)\n"
         "❌ /удалить_вещь 1\n"
         "❌ /удалить_заметку 1\n"
-        "🗑 /очистить — удалить вообще все данные.\n\n"
+        "🗑 /очистить — удалить вообще все данные.\n"
+        "🔗 <b>В Mini App (внизу) есть кнопка «Отвязать партнёра»</b>, если захотите сменить пару.\n\n"
         
         "💡 <b>Совет:</b> Данные теперь хранятся в надежной базе данных, так что они <b>никогда не удалятся</b>, даже если сервер перезагрузится!"
     )
@@ -514,12 +566,67 @@ async def clear_all(message: types.Message):
     await update_couple_data(couple.id, data)
     await message.answer("✅ Все данные удалены.")
 
+# --- INLINE РЕЖИМ (ДОБАВЛЕНЫ ВСЕ КОМАНДЫ) ---
 @dp.inline_query()
 async def inline_handler(query: types.InlineQuery):
     text = query.query.lower().strip()
     couple = await get_user_couple(query.from_user.id)
     data = couple.data_json
     results = []
+
+    # Базовые результаты (если запрос пустой или не совпал)
+    if not text:
+        results.append(InlineQueryResultArticle(id="link_miniapp", title="💖 Открыть Mini App", description="Откроет окно", input_message_content=InputTextMessageContent(message_text=f"💖 Наше окно: {SERVER_URL}")))
+        results.append(InlineQueryResultArticle(id="link_website", title="🌐 Открыть сайт", description="Откроет сайт", input_message_content=InputTextMessageContent(message_text=f"🌐 Наш сайт: {SERVER_URL}")))
+
+    # Все команды для быстрой вставки
+    commands = [
+        ("Старт / Приглашение", "/start"),
+        ("Гайд", "/гайд"),
+        ("Помощь", "/помощь"),
+        ("Мой код", "/мой_код"),
+        ("Дата встречи", "/дата 2026-12-31"),
+        ("Дата отношений", "/отношения 2024-01-01"),
+        ("Дни до встречи", "/дни"),
+        ("Добавить план", "/план Купить билеты"),
+        ("Добавить вещь", "/вещь Паспорт"),
+        ("Добавить заметку", "/заметка Не забыть цветы"),
+        ("Отчет", "/отчет"),
+        ("Изменить название", "/название Дина и Аниша"),
+        ("Изменить стиль", "/стиль #17212b #e91e63 24px italic"),
+        ("Удалить план", "/удалить_план 1"),
+        ("Удалить вещь", "/удалить_вещь 1"),
+        ("Удалить заметку", "/удалить_заметку 1"),
+        ("Удалить дату", "/удалить_дату"),
+        ("Очистить всё", "/очистить"),
+        ("Наша песня", "/музыка"),
+        ("Наша фоточка", "/фото"),
+        ("Цитата о любви", "/любовь")
+    ]
+
+    for title, cmd in commands:
+        if text in title.lower() or text in cmd:
+            results.append(InlineQueryResultArticle(
+                id=f"cmd_{cmd}", 
+                title=f"⚡ {title}", 
+                description=f"Вставить команду: {cmd}",
+                input_message_content=InputTextMessageContent(message_text=cmd)
+            ))
+
+    # Если в запросе есть "цитата", "любовь" или пусто — выводим цитаты
+    if "цитат" in text or "любов" in text or not text:
+        for i, quote in enumerate(LOVE_QUOTES):
+            results.append(InlineQueryResultPhoto( # Используем Photo для красивой картинки цитаты, если есть
+                id=f"quote_{i}", 
+                photo_url="https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg", # Заглушка
+                thumbnail_url="https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg",
+                title=f"💌 Цитата {i+1}", 
+                description=quote[:40]+"...", 
+                caption=f"<blockquote><i>{quote}</i></blockquote>", 
+                parse_mode="HTML"
+            ))
+
+    # Если в запросе есть "отчет" или "фото"
     if "отчет" in text or "фото" in text or not text:
         title = data.get("title", "💖 Наша пара 💖")
         report_text = f"<b>{title}</b>\n\n"
@@ -530,19 +637,29 @@ async def inline_handler(query: types.InlineQuery):
         report_text += "\n<blockquote><b>🎒 Вещи:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["packing"], 1)]) if data["packing"] else "  Пусто") + "</blockquote>"
         report_text += "\n<blockquote><b>📝 Заметки:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["notes"], 1)]) if data["notes"] else "  Пусто") + "</blockquote>"
         photo_url = data.get("custom_photo") or "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg"
-        results.append(InlineQueryResultPhoto(id="report_photo", photo_url=photo_url, thumbnail_url=photo_url, title="📸 Фото + Отчет", description="Фото с отчетом", caption=report_text, parse_mode="HTML"))
-    if "окно" in text or "ссылка" in text or not text:
-        results.append(InlineQueryResultArticle(id="link_miniapp", title="💖 Открыть Mini App", description="Откроет окно", input_message_content=InputTextMessageContent(message_text=f"💖 Наше окно: {MINI_APP_URL}")))
-        results.append(InlineQueryResultArticle(id="link_website", title="🌐 Открыть сайт", description="Откроет сайт", input_message_content=InputTextMessageContent(message_text=f"🌐 Наш сайт: {SERVER_URL}")))
-    if "любовь" in text or not text:
-        for i, quote in enumerate(LOVE_QUOTES):
-            results.append(InlineQueryResultArticle(id=f"quote_{i}", title=f"💌 Цитата {i+1}", description=quote[:40]+"...", input_message_content=InputTextMessageContent(message_text=f"<blockquote><i>{quote}</i></blockquote>", parse_mode="HTML")))
-    await query.answer(results[:20], cache_time=1)
+        
+        # Чтобы не дублировать фото отчет и цитаты, добавим только если это отчет
+        if "отчет" in text or "фото" in text:
+             results.append(InlineQueryResultArticle(id="report_text", title="📸 Текстовый отчет", description="Все планы и заметки", input_message_content=InputTextMessageContent(message_text=report_text, parse_mode="HTML")))
+
+    await query.answer(results[:50], cache_time=1) # Увеличили лимит до 50
 
 async def run_bot():
-    await dp.start_polling(bot)
+    logger.info("Запуск polling для бота...")
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+        await dp.start_polling(bot)
+    except Exception as e:
+        logger.error(f"Ошибка при запуске бота: {e}")
 
 @app.on_event("startup")
 async def startup_event():
-    await init_db() 
+    logger.info("Инициализация базы данных...")
+    try:
+        await init_db()
+        logger.info("База данных успешно инициализирована.")
+    except Exception as e:
+        logger.error(f"Ошибка подключения к базе данных: {e}")
+    
+    logger.info("Создание задачи для запуска бота...")
     asyncio.create_task(run_bot())
