@@ -566,31 +566,79 @@ async def clear_all(message: types.Message):
     await update_couple_data(couple.id, data)
     await message.answer("✅ Все данные удалены.")
 
-# --- INLINE РЕЖИМ (ДОБАВЛЕНЫ ВСЕ КОМАНДЫ) ---
+# --- INLINE РЕЖИМ ---
 @dp.inline_query()
 async def inline_handler(query: types.InlineQuery):
     text = query.query.lower().strip()
     couple = await get_user_couple(query.from_user.id)
     data = couple.data_json
     results = []
+    bot_username = (await bot.get_me()).username
 
-    # Базовые результаты (если запрос пустой или не совпал)
-    if not text:
-        results.append(InlineQueryResultArticle(id="link_miniapp", title="💖 Открыть Mini App", description="Откроет окно", input_message_content=InputTextMessageContent(message_text=f"💖 Наше окно: {SERVER_URL}")))
-        results.append(InlineQueryResultArticle(id="link_website", title="🌐 Открыть сайт", description="Откроет сайт", input_message_content=InputTextMessageContent(message_text=f"🌐 Наш сайт: {SERVER_URL}")))
+    # Текст гайда
+    guide_text = (
+        "📖 <b>Подробный гайд по боту Love App</b>\n\n"
+        "Этот бот создан для пар, которые хотят вести общие планы, списки вещей и заметки, даже находясь на расстоянии.\n\n"
+        "👫 <b>1. Как пригласить партнера?</b>\n"
+        "• Напиши команду /мой_код.\n"
+        "• Скопируй ссылку и отправь её партнеру.\n"
+        "• Как только партнер перейдет по ссылке и нажмет «Start», вы будете связаны!\n\n"
+        "💻 <b>2. Как открыть Mini App (Окно)?</b>\n"
+        "• Нажми на кнопку <b>«💖 Открыть наше окно»</b> под любым сообщением бота.\n"
+        "• Внутри окна ты можешь добавлять планы, вещи в поездку и заметки.\n"
+        "• Внизу окна есть настройки: цвета (есть палитра!), шрифт, картинка и название.\n\n"
+        "🛠 <b>3. Основные команды:</b>\n"
+        "📅 /дата 2026-12-31\n❤️ /отношения 2024-01-01\n📊 /дни\n📋 /план Текст\n🎒 /вещь Текст\n📝 /заметка Текст\n📋 /отчет\n🏷 /название Имя\n🎨 /стиль #17212b #e91e63 24px italic\n\n"
+        "🗑 <b>4. Удаление:</b>\n"
+        "❌ /удалить_план 1\n❌ /удалить_вещь 1\n❌ /удалить_заметку 1\n🗑 /очистить\n\n"
+        "💡 <b>Совет:</b> Данные хранятся в надежной базе данных и не удалятся при перезагрузке!"
+    )
 
-    # Все команды для быстрой вставки
+    # Код партнера
+    code_text = (
+        f"💖 <b>Мой код для приглашения:</b>\n"
+        f"<code>{couple.invite_code}</code>\n\n"
+        f"Ссылка для партнера:\n"
+        f"https://t.me/{bot_username}?start={couple.invite_code}"
+    )
+
+    # Результат для Mini App
+    if "окно" in text or "мини" in text or not text:
+        results.append(InlineQueryResultArticle(
+            id="link_miniapp", 
+            title="💖 Открыть Mini App (внутри Telegram)", 
+            description="Откроет окно прямо в чате", 
+            input_message_content=InputTextMessageContent(
+                message_text=f"Нажми, чтобы открыть: https://t.me/{bot_username}/love_window",
+            )
+        ))
+
+    # Гайд
+    if "гайд" in text or "инструкция" in text or not text:
+        results.append(InlineQueryResultArticle(
+            id="guide", 
+            title="📖 Гайд (полный текст)", 
+            description="Отправит полную инструкцию в чат",
+            input_message_content=InputTextMessageContent(message_text=guide_text, parse_mode="HTML")
+        ))
+
+    # Мой код
+    if "код" in text or "приглас" in text or not text:
+        results.append(InlineQueryResultArticle(
+            id="my_code", 
+            title="👫 Мой код (с ссылкой)", 
+            description="Отправит твой код и ссылку для партнера",
+            input_message_content=InputTextMessageContent(message_text=code_text, parse_mode="HTML")
+        ))
+
+    # Остальные команды (шаблоны)
     commands = [
-        ("Старт / Приглашение", "/start"),
-        ("Гайд", "/гайд"),
-        ("Помощь", "/помощь"),
-        ("Мой код", "/мой_код"),
         ("Дата встречи", "/дата 2026-12-31"),
         ("Дата отношений", "/отношения 2024-01-01"),
         ("Дни до встречи", "/дни"),
-        ("Добавить план", "/план Купить билеты"),
-        ("Добавить вещь", "/вещь Паспорт"),
-        ("Добавить заметку", "/заметка Не забыть цветы"),
+        ("Добавить план", "/план "),
+        ("Добавить вещь", "/вещь "),
+        ("Добавить заметку", "/заметка "),
         ("Отчет", "/отчет"),
         ("Изменить название", "/название Дина и Аниша"),
         ("Изменить стиль", "/стиль #17212b #e91e63 24px italic"),
@@ -605,28 +653,25 @@ async def inline_handler(query: types.InlineQuery):
     ]
 
     for title, cmd in commands:
-        if text in title.lower() or text in cmd:
+        if text in title.lower() or text in cmd or not text:
             results.append(InlineQueryResultArticle(
-                id=f"cmd_{cmd}", 
+                id=f"cmd_{cmd.strip()}", 
                 title=f"⚡ {title}", 
-                description=f"Вставить команду: {cmd}",
+                description=f"Отправит: {cmd}",
                 input_message_content=InputTextMessageContent(message_text=cmd)
             ))
 
-    # Если в запросе есть "цитата", "любовь" или пусто — выводим цитаты
+    # Цитаты
     if "цитат" in text or "любов" in text or not text:
         for i, quote in enumerate(LOVE_QUOTES):
-            results.append(InlineQueryResultPhoto( # Используем Photo для красивой картинки цитаты, если есть
+            results.append(InlineQueryResultArticle(
                 id=f"quote_{i}", 
-                photo_url="https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg", # Заглушка
-                thumbnail_url="https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg",
                 title=f"💌 Цитата {i+1}", 
                 description=quote[:40]+"...", 
-                caption=f"<blockquote><i>{quote}</i></blockquote>", 
-                parse_mode="HTML"
+                input_message_content=InputTextMessageContent(message_text=f"<blockquote><i>{quote}</i></blockquote>", parse_mode="HTML")
             ))
 
-    # Если в запросе есть "отчет" или "фото"
+    # Отчет
     if "отчет" in text or "фото" in text or not text:
         title = data.get("title", "💖 Наша пара 💖")
         report_text = f"<b>{title}</b>\n\n"
@@ -636,13 +681,10 @@ async def inline_handler(query: types.InlineQuery):
         report_text += "\n<blockquote><b>📋 Планы:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["plans"], 1)]) if data["plans"] else "  Пусто") + "</blockquote>"
         report_text += "\n<blockquote><b>🎒 Вещи:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["packing"], 1)]) if data["packing"] else "  Пусто") + "</blockquote>"
         report_text += "\n<blockquote><b>📝 Заметки:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["notes"], 1)]) if data["notes"] else "  Пусто") + "</blockquote>"
-        photo_url = data.get("custom_photo") or "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg"
         
-        # Чтобы не дублировать фото отчет и цитаты, добавим только если это отчет
-        if "отчет" in text or "фото" in text:
-             results.append(InlineQueryResultArticle(id="report_text", title="📸 Текстовый отчет", description="Все планы и заметки", input_message_content=InputTextMessageContent(message_text=report_text, parse_mode="HTML")))
+        results.append(InlineQueryResultArticle(id="report_text", title="📸 Текстовый отчет", description="Все планы и заметки", input_message_content=InputTextMessageContent(message_text=report_text, parse_mode="HTML")))
 
-    await query.answer(results[:50], cache_time=1) # Увеличили лимит до 50
+    await query.answer(results[:50], cache_time=1)
 
 async def run_bot():
     logger.info("Запуск polling для бота...")
