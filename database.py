@@ -1,8 +1,7 @@
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
-from sqlalchemy import Column, Integer, String, JSON
-
+from sqlalchemy import Column, Integer, BigInteger, String, JSON
 # Твоя ссылка подключения (с добавленным +asyncpg)
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_async_engine(DATABASE_URL, echo=False)
@@ -13,8 +12,9 @@ Base = declarative_base()
 class Couple(Base):
     __tablename__ = "couples"
     id = Column(Integer, primary_key=True, index=True)
-    user1_id = Column(Integer, nullable=False) # Telegram ID первого
-    user2_id = Column(Integer, nullable=True)  # Telegram ID второго
+user1_id = Column(BigInteger, nullable=False)
+user2_id = Column(BigInteger, nullable=True)
+
     invite_code = Column(String, unique=True, index=True) # Код приглашения
     data_json = Column(JSON, default={}) # Сами планы, заметки и т.д.
 
