@@ -629,7 +629,7 @@ async def inline_handler(query: types.InlineQuery):
             input_message_content=InputTextMessageContent(message_text=guide_text, parse_mode="HTML")
         ))
 
-    # --- НОВАЯ КНОПКА ДЛЯ MINI APP В INLINE-РЕЖИМЕ ---
+    # --- КНОПКА ДЛЯ MINI APP В INLINE-РЕЖИМЕ ---
     # Эта кнопка появится НАД списком результатов
     inline_button = InlineQueryResultsButton(
         text="💖 Открыть наше окно",
