@@ -35,25 +35,42 @@ LOVE_QUOTES = [
     "«Расстояние — ничто, когда веришь друг в друга.»",
 ]
 
-# --- РАБОТА С БАЗОЙ ---
+# --- РАБОТА С БАЗОЙ (ЗАЩИЩЕННАЯ ВЕРСИЯ) ---
 async def get_user_couple(user_id: int, create_if_missing=True):
     async with async_session() as session:
-        result = await session.execute(select(Couple).where((Couple.user1_id == user_id) | (Couple.user2_id == user_id)))
-        couple = result.scalar_one_or_none()
-        
-        if not couple and create_if_missing:
+        try:
+            result = await session.execute(select(Couple).where((Couple.user1_id == user_id) | (Couple.user2_id == user_id)))
+            couple = result.scalars().first() # Берем первую попавшуюся, если есть дубликаты
+            
+            if not couple and create_if_missing:
+                new_code = f"LOVE-{uuid.uuid4().hex[:4].upper()}"
+                couple = Couple(user1_id=user_id, invite_code=new_code, data_json={
+                    "meet_date": None, "plans": [], "packing": [], "notes": [], 
+                    "custom_photo": "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg", 
+                    "title": "💖 Наша пара 💖",
+                    "bg_color": "#17212b", "btn_color": "#2481cc", 
+                    "rel_date": None, "font_size": "22px", "font_style": "italic"
+                })
+                session.add(couple)
+                await session.commit()
+                await session.refresh(couple)
+            return couple
+        except Exception as e:
+            logger.error(f"Ошибка базы данных для user_id {user_id}: {e}")
+            await session.rollback()
+            # Если произошла ошибка, создаем новую запись с нуля
             new_code = f"LOVE-{uuid.uuid4().hex[:4].upper()}"
             couple = Couple(user1_id=user_id, invite_code=new_code, data_json={
                 "meet_date": None, "plans": [], "packing": [], "notes": [], 
                 "custom_photo": "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg", 
-                "title": "💖 Дина и Аниша 💖",
+                "title": "💖 Наша пара 💖",
                 "bg_color": "#17212b", "btn_color": "#2481cc", 
                 "rel_date": None, "font_size": "22px", "font_style": "italic"
             })
             session.add(couple)
             await session.commit()
             await session.refresh(couple)
-        return couple
+            return couple
 
 async def update_couple_data(couple_id: int, data: dict):
     async with async_session() as session:
