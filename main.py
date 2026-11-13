@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, CommandObject
 from aiogram.types import (InlineKeyboardButton, WebAppInfo, InlineQueryResultArticle, 
-                           InlineQueryResultPhoto, InputTextMessageContent)
+                           InlineQueryResultPhoto, InputTextMessageContent, InlineQueryResultsButton)
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import datetime
 import random
@@ -24,11 +24,6 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 SERVER_URL = "https://love-app-rb47.onrender.com"
 MUSIC_URL = "https://example.com/love.mp3"
 
-if not BOT_TOKEN:
-    logger.error("КРИТИЧЕСКАЯ ОШИБКА: BOT_TOKEN не найден!")
-else:
-    logger.info("Токен успешно загружен.")
-
 bot = Bot(token=BOT_TOKEN if BOT_TOKEN else "123:fake")
 dp = Dispatcher()
 
@@ -38,8 +33,6 @@ LOVE_QUOTES = [
     "«Говорят, любовь на расстоянии невозможна. Солнце тоже далеко… но всё же греет.»",
     "«Даже тот, кто далеко, стоит рядом, если он в твоем сердце.»",
     "«Расстояние — ничто, когда веришь друг в друга.»",
-    "«Любовь на расстоянии, как искра на ветру — слабую она гасит, а сильную разжигает.»",
-    "«Когда по-настоящему любишь, то расстояний не существует.»"
 ]
 
 # --- РАБОТА С БАЗОЙ ---
@@ -351,18 +344,17 @@ async def guide(message: types.Message):
         "📖 <b>Подробный гайд по боту Love App</b>\n\n"
         "Этот бот создан для пар, которые хотят вести общие планы, списки вещей и заметки, даже находясь на расстоянии.\n\n"
         "👫 <b>1. Как пригласить партнера?</b>\n"
-        "• Напиши команду /мой_код (или посмотри код в приветствии).\n"
-        "• Скопируй ссылку, которую пришлет бот, и отправь её своему партнеру.\n"
-        "• Как только партнер перейдет по ссылке и нажмет «Start», вы будете связаны!\n\n"
-        "💻 <b>2. Как открыть Mini App (Окно)?</b>\n"
-        "• Нажми на кнопку <b>«💖 Открыть наше окно»</b> под любым сообщением бота.\n"
-        "• Внутри окна ты можешь добавлять планы, вещи в поездку и заметки.\n"
-        "• Внизу окна есть настройки: цвета (есть палитра!), шрифт, картинка и название.\n\n"
-        "🛠 <b>3. Основные команды:</b>\n"
+        "• Напиши команду /мой_код.\n"
+        "• Скопируй ссылку и отправь партнеру.\n"
+        "• После нажатия «Start», вы связаны!\n\n"
+        "💻 <b>2. Mini App</b>\n"
+        "• Жми «💖 Открыть наше окно» и добавляй планы.\n"
+        "• Внизу окна есть палитра цветов и кнопка отвязки.\n\n"
+        "🛠 <b>3. Команды:</b>\n"
         "📅 /дата 2026-12-31\n❤️ /отношения 2024-01-01\n📊 /дни\n📋 /план Текст\n🎒 /вещь Текст\n📝 /заметка Текст\n📋 /отчет\n🏷 /название Имя\n🎨 /стиль #17212b #e91e63 24px italic\n\n"
         "🗑 <b>4. Удаление:</b>\n"
         "❌ /удалить_план 1\n❌ /удалить_вещь 1\n❌ /удалить_заметку 1\n🗑 /очистить\n\n"
-        "💡 <b>Совет:</b> Данные теперь хранятся в надежной базе данных!"
+        "💡 <b>Совет:</b> Данные хранятся в базе и не удалятся!"
     )
     await message.answer(text, parse_mode="HTML")
 
@@ -549,7 +541,7 @@ async def clear_all(message: types.Message):
     await update_couple_data(couple.id, data)
     await message.answer("✅ Все данные удалены.")
 
-# --- INLINE РЕЖИМ ---
+# --- INLINE РЕЖИМ (С КНОПКОЙ MINI APP) ---
 @dp.inline_query()
 async def inline_handler(query: types.InlineQuery):
     text = query.query.lower().strip()
@@ -558,109 +550,93 @@ async def inline_handler(query: types.InlineQuery):
     results = []
     bot_username = (await bot.get_me()).username
 
-    # Текст гайда
-    guide_text = (
-        "📖 <b>Подробный гайд по боту Love App</b>\n\n"
-        "Этот бот создан для пар, которые хотят вести общие планы, списки вещей и заметки.\n\n"
-        "👫 <b>1. Как пригласить партнера?</b>\n"
-        "• Напиши /мой_код.\n"
-        "• Скопируй ссылку и отправь партнеру.\n"
-        "• После нажатия «Start», вы связаны!\n\n"
-        "💻 <b>2. Mini App</b>\n"
-        "• Жми «💖 Открыть наше окно» и добавляй планы.\n"
-        "• Внизу окна есть палитра цветов и кнопка отвязки.\n\n"
-        "🛠 <b>3. Команды:</b>\n"
-        "📅 /дата 2026-12-31\n❤️ /отношения 2024-01-01\n📊 /дни\n📋 /план Текст\n🎒 /вещь Текст\n📝 /заметка Текст\n📋 /отчет\n🏷 /название Имя\n🎨 /стиль #17212b #e91e63 24px italic\n\n"
-        "🗑 <b>4. Удаление:</b>\n"
-        "❌ /удалить_план 1\n❌ /удалить_вещь 1\n❌ /удалить_заметку 1\n🗑 /очистить"
-    )
+    # Формируем данные для карточек
+    meet_text = "Дата не задана"
+    if data.get("meet_date"):
+        meet = datetime.datetime.strptime(data["meet_date"], "%Y-%m-%d").date()
+        days = (meet - datetime.date.today()).days
+        meet_text = f"✈️ До встречи: <b>{days} дн.</b>"
+    
+    rel_text = "Дата не задана"
+    if data.get("rel_date"):
+        rel = datetime.datetime.strptime(data["rel_date"], "%Y-%m-%d").date()
+        days = (datetime.date.today() - rel).days
+        rel_text = f"❤️ Вместе уже: <b>{days} дн.</b>"
 
-    # Код партнера
-    code_text = f"💖 <b>Мой код для приглашения:</b>\n<code>{couple.invite_code}</code>\n\nСсылка:\nhttps://t.me/{bot_username}?start={couple.invite_code}"
+    plans_text = "\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["plans"], 1)]) if data["plans"] else "  Пусто"
+    packing_text = "\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["packing"], 1)]) if data["packing"] else "  Пусто"
+    notes_text = "\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["notes"], 1)]) if data["notes"] else "  Пусто"
 
-    # Результат для Mini App (открывает внутри Telegram)
-    if "окно" in text or "мини" in text or not text:
-        results.append(InlineQueryResultArticle(
-            id="link_miniapp", 
-            title="💖 Открыть Mini App (внутри Telegram)", 
-            description="Откроет окно прямо в чате", 
-            input_message_content=InputTextMessageContent(
-                message_text=f"Нажми, чтобы открыть: https://t.me/{bot_username}/love_window",
-            )
+    title = data.get("title", "💖 Наша пара 💖")
+    photo_url = data.get("custom_photo") or "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg"
+
+    # 1. Фото + Отчет (Самая красивая карточка)
+    if not text or "фото" in text or "отчет" in text:
+        caption = (
+            f"<b>{title}</b>\n\n"
+            f"{meet_text}\n{rel_text}\n\n"
+            f"<blockquote><b>📋 Планы:</b>\n{plans_text}</blockquote>\n"
+            f"<blockquote><b>🎒 Вещи:</b>\n{packing_text}</blockquote>\n"
+            f"<blockquote><b>📝 Заметки:</b>\n{notes_text}</blockquote>"
+        )
+        results.append(InlineQueryResultPhoto(
+            id="report_photo", 
+            photo_url=photo_url, 
+            thumbnail_url=photo_url, 
+            title="📸 Наше фото + Отчет", 
+            description="Красивая карточка с фото и всеми данными", 
+            caption=caption, 
+            parse_mode="HTML"
         ))
 
-    # Гайд
-    if "гайд" in text or "инструкция" in text or not text:
+    # 2. Даты и Уведомление (Только текст со статистикой)
+    if not text or "дата" in text or "дни" in text or "уведом" in text:
+        dates_text = (
+            f"<b>{title}</b>\n\n"
+            f"{meet_text}\n"
+            f"{rel_text}\n\n"
+            f"<i>Нажми на кнопку ниже, чтобы открыть общее окно!</i>"
+        )
         results.append(InlineQueryResultArticle(
-            id="guide", 
-            title="📖 Гайд (полный текст)", 
-            description="Отправит полную инструкцию в чат",
-            input_message_content=InputTextMessageContent(message_text=guide_text, parse_mode="HTML")
+            id="dates_info", 
+            title="📅 Даты и Уведомление", 
+            description="Сколько дней осталось до встречи", 
+            input_message_content=InputTextMessageContent(message_text=dates_text, parse_mode="HTML")
         ))
 
-    # Мой код
-    if "код" in text or "приглас" in text or not text:
+    # 3. Мой код
+    if not text or "код" in text:
+        code_text = f"💖 <b>Мой код для приглашения:</b>\n<code>{couple.invite_code}</code>\n\nСсылка:\nhttps://t.me/{bot_username}?start={couple.invite_code}"
         results.append(InlineQueryResultArticle(
             id="my_code", 
-            title="👫 Мой код (с ссылкой)", 
+            title="👫 Мой код и Ссылка", 
             description="Отправит твой код и ссылку для партнера",
             input_message_content=InputTextMessageContent(message_text=code_text, parse_mode="HTML")
         ))
 
-    # Остальные команды (шаблоны)
-    commands = [
-        ("Дата встречи", "/дата 2026-12-31"),
-        ("Дата отношений", "/отношения 2024-01-01"),
-        ("Дни до встречи", "/дни"),
-        ("Добавить план", "/план "),
-        ("Добавить вещь", "/вещь "),
-        ("Добавить заметку", "/заметка "),
-        ("Отчет", "/отчет"),
-        ("Изменить название", "/название Дина и Аниша"),
-        ("Изменить стиль", "/стиль #17212b #e91e63 24px italic"),
-        ("Удалить план", "/удалить_план 1"),
-        ("Удалить вещь", "/удалить_вещь 1"),
-        ("Удалить заметку", "/удалить_заметку 1"),
-        ("Удалить дату", "/удалить_дату"),
-        ("Очистить всё", "/очистить"),
-        ("Наша песня", "/музыка"),
-        ("Наша фоточка", "/фото"),
-        ("Цитата о любви", "/любовь")
-    ]
+    # 4. Гайд
+    if not text or "гайд" in text:
+        guide_text = (
+            "📖 <b>Гайд по Love App</b>\n\n"
+            "👫 <b>Связка:</b> Отправь свой код партнеру.\n"
+            "💻 <b>Mini App:</b> Открой окно и добавляй планы/вещи.\n"
+            "🛠 <b>Команды:</b> /дата, /план, /вещь, /отчет."
+        )
+        results.append(InlineQueryResultArticle(
+            id="guide", 
+            title="📖 Гайд (полный текст)", 
+            description="Отправит инструкцию в чат",
+            input_message_content=InputTextMessageContent(message_text=guide_text, parse_mode="HTML")
+        ))
 
-    for title, cmd in commands:
-        if text in title.lower() or text in cmd or not text:
-            results.append(InlineQueryResultArticle(
-                id=f"cmd_{cmd.strip()}", 
-                title=f"⚡ {title}", 
-                description=f"Отправит: {cmd}",
-                input_message_content=InputTextMessageContent(message_text=cmd)
-            ))
+    # --- НОВАЯ КНОПКА ДЛЯ MINI APP В INLINE-РЕЖИМЕ ---
+    # Эта кнопка появится НАД списком результатов
+    inline_button = InlineQueryResultsButton(
+        text="💖 Открыть наше окно",
+        web_app=WebAppInfo(url=SERVER_URL)
+    )
 
-    # Цитаты
-    if "цитат" in text or "любов" in text or not text:
-        for i, quote in enumerate(LOVE_QUOTES):
-            results.append(InlineQueryResultArticle(
-                id=f"quote_{i}", 
-                title=f"💌 Цитата {i+1}", 
-                description=quote[:40]+"...", 
-                input_message_content=InputTextMessageContent(message_text=f"<blockquote><i>{quote}</i></blockquote>", parse_mode="HTML")
-            ))
-
-    # Отчет
-    if "отчет" in text or "фото" in text or not text:
-        title = data.get("title", "💖 Наша пара 💖")
-        report_text = f"<b>{title}</b>\n\n"
-        if data.get("meet_date"):
-            meet = datetime.datetime.strptime(data["meet_date"], "%Y-%m-%d").date()
-            report_text += f"✈️ До встречи: <b>{(meet - datetime.date.today()).days} дн.</b>\n"
-        report_text += "\n<blockquote><b>📋 Планы:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["plans"], 1)]) if data["plans"] else "  Пусто") + "</blockquote>"
-        report_text += "\n<blockquote><b>🎒 Вещи:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["packing"], 1)]) if data["packing"] else "  Пусто") + "</blockquote>"
-        report_text += "\n<blockquote><b>📝 Заметки:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["notes"], 1)]) if data["notes"] else "  Пусто") + "</blockquote>"
-        
-        results.append(InlineQueryResultArticle(id="report_text", title="📸 Текстовый отчет", description="Все планы и заметки", input_message_content=InputTextMessageContent(message_text=report_text, parse_mode="HTML")))
-
-    await query.answer(results[:50], cache_time=1)
+    await query.answer(results[:10], cache_time=1, button=inline_button)
 
 async def run_bot():
     logger.info("Запуск polling для бота...")
