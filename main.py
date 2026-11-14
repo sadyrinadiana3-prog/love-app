@@ -208,6 +208,9 @@ HTML_PAGE = """
         async function loadData() {
             renderPalette('bgPalette', true);
             renderPalette('btnPalette', true);
+            renderPalette('bgPalette', 'bgColor', true);
+            renderPalette('btnPalette', 'btnColor', true);
+            document.getElementById('days').innerText = "✈️ Загрузка данных...";
 
             try {
                 let res = await fetch(`/api/data?user_id=${userId}`);
@@ -224,6 +227,8 @@ HTML_PAGE = """
                 renderPalette('btnPalette', true);
             } catch (e) {
                 document.getElementById('days').innerText = "❌ Ошибка: " + e.message;
+                console.error(e);
+                document.getElementById('days').innerText = "❌ Ошибка сети. Попробуйте позже.";
             }
         }
 
@@ -234,6 +239,9 @@ HTML_PAGE = """
 """
 # --- СТРАНИЦА ДЛЯ ИГРЫ SPICER (ИСПРАВЛЕНИЕ 404) ---
  SPICER_PAGE = """
+
+# --- СТРАНИЦА ДЛЯ ИГРЫ SPICER ---
+SPICER_PAGE = """
 <!DOCTYPE html>
 <html>
 <head>
