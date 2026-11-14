@@ -4,7 +4,7 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, CommandObject
 from aiogram.types import (InlineKeyboardButton, WebAppInfo, InlineQueryResultArticle, 
                            InlineQueryResultPhoto, InputTextMessageContent, InlineQueryResultsButton,
-                           LabeledPrice, PreCheckoutQuery)
+                           LabeledPrice, PreCheckoutQuery, BufferedInputFile)
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import datetime
 import random
@@ -12,6 +12,8 @@ import asyncio
 import uuid
 import os
 import logging
+import io
+from PIL import Image, ImageDraw, ImageFont
 
 from database import init_db, async_session, Couple
 from sqlalchemy import select
@@ -40,6 +42,13 @@ DAILY_QUESTIONS = [
     "За что ты благодарен партнеру сегодня?",
 ]
 
+SPICER_QUESTIONS = [
+    "Хочешь ли ты устроить романтический ужин?",
+    "Хочешь ли ты поехать в спонтанное путешествие?",
+    "Хочешь ли ты попробовать что-то новое в постели?",
+    "Хочешь ли ты устроить сюрприз для партнера?",
+]
+
 # --- РАБОТА С БАЗОЙ ---
 async def get_user_couple(user_id: int, create_if_missing=True):
     async with async_session() as session:
@@ -57,7 +66,9 @@ async def get_user_couple(user_id: int, create_if_missing=True):
                     "rel_date": None, "font_size": "22px", "font_style": "italic",
                     "capsules": [],
                     "daily_question": None,
-                    "partner_answer": None
+                    "partner_answer": None,
+                    "spicer_answers": {},
+                    "last_analytics_date": None
                 })
                 session.add(couple)
                 await session.commit()
@@ -80,6 +91,58 @@ async def update_couple_data(couple_id: int, data: dict):
         if couple:
             couple.data_json = data
             await session.commit()
+
+# --- ГЕНЕРАЦИЯ КАРТИНКИ ---
+def generate_report_image(data: dict) -> bytes:
+    width, height = 800, 1000
+    img = Image.new('RGB', (width, height), color='#17212b')
+    draw = ImageDraw.Draw(img)
+    
+    try:
+        font_title = ImageFont.truetype("/system/fonts/Roboto-Bold.ttf", 50)
+        font_text = ImageFont.truetype("/system/fonts/Roboto-Regular.ttf", 30)
+        font_small = ImageFont.truetype("/system/fonts/Roboto-Regular.ttf", 24)
+    except:
+        font_title = ImageFont.load_default()
+        font_text = ImageFont.load_default()
+        font_small = ImageFont.load_default()
+
+    title = data.get("title", "💖 Наша пара 💖")
+    draw.text((width//2, 50), title, fill="#ffffff", font=font_title, anchor="ma")
+    
+    y_offset = 150
+    if data.get("meet_date"):
+        meet = datetime.datetime.strptime(data["meet_date"], "%Y-%m-%d").date()
+        days = (meet - datetime.date.today()).days
+        draw.text((50, y_offset), f"✈️ До встречи: {days} дн.", fill="#64b5f6", font=font_text)
+        y_offset += 50
+    if data.get("rel_date"):
+        rel = datetime.datetime.strptime(data["rel_date"], "%Y-%m-%d").date()
+        days = (datetime.date.today() - rel).days
+        draw.text((50, y_offset), f"❤️ Вместе уже: {days} дн.", fill="#64b5f6", font=font_text)
+        y_offset += 80
+
+    draw.text((50, y_offset), "📋 Планы:", fill="#ff9800", font=font_text)
+    y_offset += 40
+    for i, p in enumerate(data.get("plans", []), 1):
+        if y_offset > height - 100: break
+        mark = "✅" if p.get("done") else "🔸"
+        draw.text((70, y_offset), f"{mark} {i}. {p.get('text')}", fill="#ffffff", font=font_small)
+        y_offset += 35
+    
+    y_offset += 20
+    draw.text((50, y_offset), "🎒 Вещи:", fill="#ff9800", font=font_text)
+    y_offset += 40
+    for i, p in enumerate(data.get("packing", []), 1):
+        if y_offset > height - 50: break
+        mark = "✅" if p.get("done") else "🔸"
+        draw.text((70, y_offset), f"{mark} {i}. {p.get('text')}", fill="#ffffff", font=font_small)
+        y_offset += 35
+
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return buf.getvalue()
 
 # --- САЙТ (ОКНО) ---
 HTML_PAGE = """ 
@@ -111,6 +174,7 @@ HTML_PAGE = """
         .danger-btn { background: #e53935; margin-top: 20px; }
         .premium-btn { background: linear-gradient(45deg, #ff9800, #e91e63); margin-top: 20px; }
         .premium-section { border: 2px dashed #ff9800; padding: 10px; border-radius: 10px; margin-top: 20px; }
+        .spicer-btn { background: #9c27b0; margin: 5px; width: auto; padding: 10px 20px; }
     </style>
 </head>
 <body>
@@ -146,6 +210,18 @@ HTML_PAGE = """
         <input type="text" id="noteInput" placeholder="Новая заметка...">
         <button onclick="addNote()">Добавить заметку</button>
     </div>
+    
+    <div class="card">
+        <h3>🎮 Игра Spicer</h3>
+        <p>Ответьте на вопросы, и если ответы совпадут, вы увидите это!</p>
+        <div id="spicerGame">
+            <div id="spicerQuestion" style="margin: 10px 0; font-weight: bold;"></div>
+            <button onclick="answerSpicer(true)" class="spicer-btn">✅ Да</button>
+            <button onclick="answerSpicer(false)" class="spicer-btn">❌ Нет</button>
+            <div id="spicerResult" style="margin-top: 10px;"></div>
+        </div>
+    </div>
+
     <div class="card bottom-settings">
         <h3>🎨 Стиль и Настройки</h3>
         <p><b>Название окна:</b></p>
@@ -184,6 +260,13 @@ HTML_PAGE = """
         let alertShown = false;
         let userId = tg.initDataUnsafe?.user?.id || 0;
         let isPremium = false;
+        let spicerQuestions = [
+            "Хочешь ли ты устроить романтический ужин?",
+            "Хочешь ли ты поехать в спонтанное путешествие?",
+            "Хочешь ли ты попробовать что-то новое в постели?",
+            "Хочешь ли ты устроить сюрприз для партнера?"
+        ];
+        let currentSpicerIndex = 0;
 
         const colors = ['#17212b', '#000000', '#1e3a5f', '#2e4a62', '#4a2e62', '#623a4a', '#2e6244', '#ffffff', '#e91e63', '#ff9800', '#4caf50', '#2481cc'];
         const premiumColors = ['#ff6b6b', '#feca57', '#48dbfb', '#ff9ff3', '#54a0ff'];
@@ -218,6 +301,26 @@ HTML_PAGE = """
             
             document.getElementById('premiumStatus').innerText = isPremium ? "✅ Премиум активен! Вам доступны эксклюзивные цвета." : "❌ Премиум не активен.";
             document.getElementById('buyPremiumBtn').style.display = isPremium ? 'none' : 'block';
+            
+            loadSpicer();
+        }
+
+        function loadSpicer() {
+            if (!currentData.spicer_answers) currentData.spicer_answers = {};
+            if (currentSpicerIndex >= spicerQuestions.length) {
+                document.getElementById('spicerQuestion').innerText = "Вы ответили на все вопросы!";
+                document.getElementById('spicerResult').innerText = "Посмотрите, совпали ли ваши ответы.";
+                return;
+            }
+            document.getElementById('spicerQuestion').innerText = spicerQuestions[currentSpicerIndex];
+        }
+
+        async function answerSpicer(answer) {
+            if (!currentData.spicer_answers) currentData.spicer_answers = {};
+            currentData.spicer_answers[currentSpicerIndex] = answer;
+            await saveData();
+            currentSpicerIndex++;
+            loadSpicer();
         }
 
         function updateUI() {
@@ -267,7 +370,7 @@ HTML_PAGE = """
             tg.showAlert("Для покупки перейдите в чат с ботом и напишите /premium");
         }
 
-        async function saveData() {
+        async def saveData() {
             await fetch(`/api/data?user_id=${userId}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(currentData) });
             updateUI();
         }
@@ -354,7 +457,6 @@ async def start_with_code(message: types.Message, command: CommandObject):
     builder.row(InlineKeyboardButton(text="💖 Открыть наше окно", web_app=WebAppInfo(url=SERVER_URL)))
     await message.answer("Нажми на кнопку ниже.", reply_markup=builder.as_markup())
 
-# --- ОБНОВЛЕННЫЙ START ---
 @dp.message(CommandStart())
 async def start(message: types.Message):
     couple = await get_user_couple(message.from_user.id)
@@ -409,8 +511,8 @@ async def premium_details(callback: types.CallbackQuery):
         "Напиши в чат команду <code>/капсула</code>. Бот попросит дату и текст. В нужный день он пришлет это сообщение вам обоим.\n\n"
         "❓ <b>3. Ежедневные вопросы:</b>\n"
         "Напиши команду <code>/вопрос</code>. Бот пришлет вопрос. Ответь на него командой <code>/ответ Твой текст</code>. Как только партнер тоже ответит, вы увидите ответы друг друга.\n\n"
-        "📊 <b>4. Аналитика и Экспорт:</b>\n"
-        "Эти функции находятся в разработке и скоро появятся в Mini App.\n\n"
+        "📸 <b>4. Экспорт в картинку:</b>\n"
+        "Напиши команду <code>/отчет</code> и бот пришлет красивую картинку с вашими планами!\n\n"
         "Стоимость: <b>50 Stars</b> (навсегда)."
     )
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=None)
@@ -673,19 +775,17 @@ async def add_note(message: types.Message):
 @dp.message(F.text == "/отчет")
 async def report(message: types.Message):
     couple = await get_user_couple(message.from_user.id)
+    if not couple:
+        return
+    
     data = couple.data_json
-    title = data.get("title", "💖 Наша пара 💖")
-    text = f"<b>{title}</b>\n\n"
-    if data.get("meet_date"):
-        meet = datetime.datetime.strptime(data["meet_date"], "%Y-%m-%d").date()
-        text += f"✈️ До встречи: <b>{(meet - datetime.date.today()).days} дн.</b>\n"
-    if data.get("rel_date"):
-        rel = datetime.datetime.strptime(data["rel_date"], "%Y-%m-%d").date()
-        text += f"❤️ Вместе: <b>{(datetime.date.today() - rel).days} дн.</b>\n"
-    text += "\n<blockquote><b>📋 Планы:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["plans"], 1)]) if data["plans"] else "  Пусто") + "</blockquote>"
-    text += "\n<blockquote><b>🎒 Вещи:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["packing"], 1)]) if data["packing"] else "  Пусто") + "</blockquote>"
-    text += "\n<blockquote><b>📝 Заметки:</b>\n" + ("\n".join([f"  {'✅' if p.get('done') else '🔸'} {i}. {p.get('text')}" for i, p in enumerate(data["notes"], 1)]) if data["notes"] else "  Пусто") + "</blockquote>"
-    await message.answer(text, parse_mode="HTML")
+    image_bytes = generate_report_image(data)
+    
+    await message.answer_photo(
+        photo=BufferedInputFile(image_bytes, filename="report.png"),
+        caption="📸 <b>Ваш отчет!</b>",
+        parse_mode="HTML"
+    )
 
 @dp.message(F.text.startswith("/удалить_план "))
 async def del_plan(message: types.Message):
@@ -737,6 +837,71 @@ async def clear_all(message: types.Message):
     data["meet_date"] = None; data["plans"] = []; data["packing"] = []; data["notes"] = []
     await update_couple_data(couple.id, data)
     await message.answer("✅ Все данные удалены.")
+
+# --- ФОНОВАЯ ЗАДАЧА ДЛЯ КАПСУЛ И АНАЛИТИКИ ---
+async def check_background_tasks():
+    while True:
+        try:
+            async with async_session() as session:
+                result = await session.execute(select(Couple))
+                couples = result.scalars().all()
+                today = datetime.date.today().strftime("%Y-%m-%d")
+                current_month = datetime.date.today().strftime("%Y-%m")
+                
+                for couple in couples:
+                    data = couple.data_json
+                    if data:
+                        # 1. Проверка капсул
+                        if "capsules" in data:
+                            capsules = data["capsules"]
+                            for cap in capsules:
+                                if not cap.get("sent") and cap.get("date") == today:
+                                    cap["sent"] = True
+                                    couple.data_json = data
+                                    await session.commit()
+                                    
+                                    for user_id in [couple.user1_id, couple.user2_id]:
+                                        if user_id:
+                                            try:
+                                                await bot.send_message(user_id, f"⏳ <b>Капсула времени открыта!</b>\n\n{cap['text']}", parse_mode="HTML")
+                                            except:
+                                                pass
+                        
+                        # 2. Ежемесячная аналитика (1-е число месяца)
+                        if data.get("last_analytics_date") != current_month and datetime.date.today().day == 1:
+                            data["last_analytics_date"] = current_month
+                            couple.data_json = data
+                            await session.commit()
+                            
+                            rel_text = ""
+                            if data.get("rel_date"):
+                                rel = datetime.datetime.strptime(data["rel_date"], "%Y-%m-%d").date()
+                                days = (datetime.date.today() - rel).days
+                                rel_text = f"❤️ Вместе уже: {days} дн.\n"
+                            
+                            total_plans = len(data.get("plans", []))
+                            done_plans = len([p for p in data.get("plans", []) if p.get("done")])
+                            
+                            text = (
+                                f"📊 <b>Ежемесячная аналитика!</b>\n\n"
+                                f"{rel_text}"
+                                f"📋 Выполнено планов: {done_plans} из {total_plans}\n"
+                                f"🎒 Вещей собрано: {len(data.get('packing', []))}\n"
+                                f"📝 Заметок создано: {len(data.get('notes', []))}\n\n"
+                                f"<i>Продолжайте в том же духе!</i>"
+                            )
+                            
+                            for user_id in [couple.user1_id, couple.user2_id]:
+                                if user_id:
+                                    try:
+                                        await bot.send_message(user_id, text, parse_mode="HTML")
+                                    except:
+                                        pass
+                                        
+            await asyncio.sleep(60)
+        except Exception as e:
+            logger.error(f"Ошибка в фоновых задачах: {e}")
+            await asyncio.sleep(60)
 
 # --- INLINE РЕЖИМ ---
 @dp.inline_query()
@@ -823,3 +988,4 @@ async def run_bot():
 async def startup_event():
     await init_db()
     asyncio.create_task(run_bot())
+    asyncio.create_task(check_background_tasks())
