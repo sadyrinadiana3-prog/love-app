@@ -3,8 +3,7 @@ from fastapi.responses import HTMLResponse
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, CommandObject
 from aiogram.types import (InlineKeyboardButton, WebAppInfo, InlineQueryResultArticle, 
-                           InlineQueryResultPhoto, InputTextMessageContent, InlineQueryResultsButton,
-                           LabeledPrice, PreCheckoutQuery)
+                           InlineQueryResultPhoto, InputTextMessageContent, InlineQueryResultsButton)
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import datetime
 import random
@@ -372,29 +371,18 @@ async def start(message: types.Message):
         parse_mode="HTML"
     )
 
-# --- ПРЕМИУМ И ОПЛАТА (С ДВУМЯ КНОПКАМИ) ---
+# --- ПРЕМИУМ (УПРОЩЕННЫЙ ВАРИАНТ БЕЗ ОПЛАТЫ) ---
 @dp.message(F.text == "/premium")
 async def premium_cmd(message: types.Message):
-    # Всегда показываем две кнопки, как просила
     text = (
         "💎 <b>Премиум-подписка Love App</b>\n\n"
-        "Нажмите на кнопку ниже, чтобы узнать все подробности или оплатить."
+        "Нажмите на кнопку ниже, чтобы узнать все подробности и функции."
     )
     
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="ℹ️ Подробнее о функциях", callback_data="premium_details"))
-    builder.row(InlineKeyboardButton(text="⭐ Оплатить 50 Stars", pay=True))
     
-    prices = [LabeledPrice(label="XTR", amount=50)]
-    await message.answer_invoice(
-        title="Премиум Love App",
-        description="Эксклюзивные цвета, капсулы времени и другие функции.",
-        prices=prices,
-        provider_token="",
-        payload="premium_50",
-        currency="XTR",
-        reply_markup=builder.as_markup()
-    )
+    await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
 @dp.callback_query(F.data == "premium_details")
 async def premium_details(callback: types.CallbackQuery):
@@ -412,21 +400,6 @@ async def premium_details(callback: types.CallbackQuery):
     )
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=None)
     await callback.answer()
-
-@dp.pre_checkout_query()
-async def pre_checkout(query: PreCheckoutQuery):
-    await query.answer(ok=True)
-
-@dp.message(F.successful_payment)
-async def success_payment(message: types.Message):
-    couple = await get_user_couple(message.from_user.id)
-    async with async_session() as session:
-        result = await session.execute(select(Couple).where(Couple.id == couple.id))
-        c = result.scalar_one_or_none()
-        if c:
-            c.is_premium = True
-            await session.commit()
-    await message.answer("🎉 <b>Оплата прошла успешно!</b> Премиум активирован навсегда. Откройте окно, чтобы увидеть новые цвета!", parse_mode="HTML")
 
 # --- СЕКРЕТНАЯ КОМАНДА ДЛЯ ВЛАДЕЛЬЦА ---
 @dp.message(F.text == "/L0v3_Adm1n_Pr3m1um_2026_X9z")
@@ -517,7 +490,7 @@ async def guide(message: types.Message):
         "🛠 <b>3. Команды:</b>\n"
         "📅 /дата 2026-12-31\n❤️ /отношения 2024-01-01\n📊 /дни\n📋 /план Текст\n🎒 /вещь Текст\n📝 /заметка Текст\n📋 /отчет\n🏷 /название Имя\n🎨 /стиль #17212b #e91e63 24px italic\n\n"
         "💎 <b>4. Премиум:</b>\n"
-        "Напиши /premium, чтобы узнать о премиум-функциях и оплатить Stars.\n"
+        "Напиши /premium, чтобы узнать о премиум-функциях.\n"
         "После активации доступны: /капсула, /вопрос.\n\n"
         "🗑 <b>5. Удаление:</b>\n"
         "❌ /удалить_план 1\n❌ /удалить_вещь 1\n❌ /удалить_заметку 1\n🗑 /очистить"
