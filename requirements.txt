@@ -4,3 +4,4 @@ aiogram
 sqlalchemy[asyncio]
 asyncpg
 Pillow
+yookassa
