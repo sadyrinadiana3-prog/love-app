@@ -36,6 +36,13 @@ LOVE_QUOTES = [
     "«Расстояние — ничто, когда веришь друг в друга.»",
 ]
 
+DAILY_QUESTIONS = [
+    "Что ты ценишь в партнере больше всего?",
+    "Какой ваш самый счастливый момент вместе?",
+    "Что бы ты хотел сделать вместе в следующем году?",
+    "За что ты благодарен партнеру сегодня?",
+]
+
 # --- РАБОТА С БАЗОЙ ---
 async def get_user_couple(user_id: int, create_if_missing=True):
     async with async_session() as session:
@@ -50,7 +57,10 @@ async def get_user_couple(user_id: int, create_if_missing=True):
                     "custom_photo": "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg", 
                     "title": "💖 Наша пара 💖",
                     "bg_color": "#17212b", "btn_color": "#2481cc", 
-                    "rel_date": None, "font_size": "22px", "font_style": "italic"
+                    "rel_date": None, "font_size": "22px", "font_style": "italic",
+                    "capsules": [],
+                    "daily_question": None,
+                    "partner_answer": None
                 })
                 session.add(couple)
                 await session.commit()
@@ -397,11 +407,11 @@ async def premium_cmd(message: types.Message):
 async def premium_details(callback: types.CallbackQuery):
     text = (
         "💎 <b>Что дает Премиум в Love App?</b>\n\n"
-        "🎨 <b>Эксклюзивный дизайн:</b> Дополнительные 5 премиум-цветов в палитре для фона и кнопок.\n\n"
-        "⏳ <b>Капсула времени:</b> Возможность написать сообщение партнеру, которое откроется в заданную дату.\n\n"
-        "📊 <b>Расширенная аналитика:</b> Красивый отчет раз в месяц о том, сколько дней вы вместе.\n\n"
-        "📸 <b>Экспорт отчета:</b> Возможность сохранить ваш отчет в виде красивой картинки (PNG) и поделиться ею.\n\n"
-        "❓ <b>Ежедневные вопросы:</b> Бот будет присылать вам с партнером интересные вопросы для общения.\n\n"
+        "🎨 <b>1. Эксклюзивный дизайн:</b> Зайди в Mini App, в разделе «Цвет фона» появятся 5 новых ярких цветов. Нажми на любой и «Применить всё».\n\n"
+        "⏳ <b>2. Капсула времени:</b> Напиши команду /капсула. Следуй инструкциям бота: укажи дату и текст. В нужный день бот пришлет это сообщение вам обоим.\n\n"
+        "📊 <b>3. Расширенная аналитика:</b> В Mini App появится блок с более подробной статистикой (например, сколько планов выполнено).\n\n"
+        "📸 <b>4. Экспорт отчета:</b> В Mini App появится кнопка «Поделиться картинкой» (пока в разработке, но скоро будет).\n\n"
+        "❓ <b>5. Ежедневные вопросы:</b> Напиши /вопрос. Бот пришлет вопрос. Как только партнер ответит на него, вы увидите ответы друг друга.\n\n"
         "Стоимость: <b>50 Stars</b> (навсегда)."
     )
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=None)
@@ -438,6 +448,65 @@ async def admin_premium(message: types.Message):
             await session.commit()
     await message.answer("🎉 <b>Админ-доступ:</b> Премиум активирован навсегда для вашего аккаунта!", parse_mode="HTML")
 
+# --- НОВЫЕ ПРЕМИУМ-КОМАНДЫ ---
+@dp.message(F.text == "/капсула")
+async def capsule_cmd(message: types.Message):
+    couple = await get_user_couple(message.from_user.id)
+    if not couple.is_premium:
+        await message.answer("❌ Эта функция доступна только с Премиумом. Напиши /premium.")
+        return
+    await message.answer("⏳ <b>Создание капсулы времени</b>\n\nНапиши дату (в формате ГГГГ-ММ-ДД), когда должно открыться сообщение, и через пробел текст.\n\nПример: <code>2026-12-31 С Новым Годом, любимая!</code>", parse_mode="HTML")
+
+@dp.message(F.text.startswith("/капсула "))
+async def create_capsule(message: types.Message):
+    couple = await get_user_couple(message.from_user.id)
+    if not couple.is_premium:
+        return
+    try:
+        parts = message.text.replace("/капсула ", "").split(" ", 1)
+        date_str = parts[0]
+        text_msg = parts[1]
+        datetime.datetime.strptime(date_str, "%Y-%m-%d")
+        
+        data = couple.data_json
+        if "capsules" not in data:
+            data["capsules"] = []
+        data["capsules"].append({"date": date_str, "text": text_msg, "sent": False})
+        await update_couple_data(couple.id, data)
+        await message.answer(f"✅ Капсула создана! Она откроется {date_str}.", parse_mode="HTML")
+    except:
+        await message.answer("❌ Ошибка формата. Пример: <code>/капсула 2026-12-31 Текст</code>", parse_mode="HTML")
+
+@dp.message(F.text == "/вопрос")
+async def daily_question(message: types.Message):
+    couple = await get_user_couple(message.from_user.id)
+    if not couple.is_premium:
+        await message.answer("❌ Эта функция доступна только с Премиумом. Напиши /premium.")
+        return
+    
+    question = random.choice(DAILY_QUESTIONS)
+    data = couple.data_json
+    data["daily_question"] = question
+    data["partner_answer"] = None
+    await update_couple_data(couple.id, data)
+    
+    await message.answer(f"❓ <b>Вопрос дня:</b>\n\n{question}\n\nОтветьте на него командой <code>/ответ Твой текст</code>", parse_mode="HTML")
+
+@dp.message(F.text.startswith("/ответ "))
+async def answer_question(message: types.Message):
+    couple = await get_user_couple(message.from_user.id)
+    if not couple.is_premium:
+        return
+    answer = message.text.replace("/ответ ", "").strip()
+    data = couple.data_json
+    if data.get("partner_answer"):
+        await message.answer("❌ Ваш партнер уже ответил на этот вопрос.")
+        return
+    
+    data["partner_answer"] = answer
+    await update_couple_data(couple.id, data)
+    await message.answer("✅ Ваш ответ сохранен! Теперь партнер тоже может ответить.")
+
 # --- ОСТАЛЬНЫЕ КОМАНДЫ (гайд, план, отчет и т.д.) ---
 @dp.message(F.text == "/гайд")
 async def guide(message: types.Message):
@@ -452,7 +521,8 @@ async def guide(message: types.Message):
         "🛠 <b>3. Команды:</b>\n"
         "📅 /дата 2026-12-31\n❤️ /отношения 2024-01-01\n📊 /дни\n📋 /план Текст\n🎒 /вещь Текст\n📝 /заметка Текст\n📋 /отчет\n🏷 /название Имя\n🎨 /стиль #17212b #e91e63 24px italic\n\n"
         "💎 <b>4. Премиум:</b>\n"
-        "Напиши /premium, чтобы узнать о премиум-функциях и оплатить Stars.\n\n"
+        "Напиши /premium, чтобы узнать о премиум-функциях и оплатить Stars.\n"
+        "После активации доступны: /капсула, /вопрос.\n\n"
         "🗑 <b>5. Удаление:</b>\n"
         "❌ /удалить_план 1\n❌ /удалить_вещь 1\n❌ /удалить_заметку 1\n🗑 /очистить"
     )
@@ -474,7 +544,10 @@ async def help_cmd(message: types.Message):
         "🏷 /название Имя\n"
         "🎨 /стиль [цвет_фона] [цвет_кнопок] [размер_шрифта] [стиль]\n"
         "👫 /мой_код - получить код для приглашения партнера\n"
-        "💎 /premium - узнать о премиуме\n\n"
+        "💎 /premium - узнать о премиуме\n"
+        "⏳ /капсула - создать капсулу времени (премиум)\n"
+        "❓ /вопрос - вопрос дня (премиум)\n"
+        "✍️ /ответ - ответить на вопрос (премиум)\n\n"
         "🗑 <b>Удаление:</b>\n"
         "❌ /удалить_план 1\n❌ /удалить_вещь 1\n❌ /удалить_заметку 1\n"
         "🗓 /удалить_дату\n🗑 /очистить"
