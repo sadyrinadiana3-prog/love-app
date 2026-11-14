@@ -377,8 +377,8 @@ async def start(message: types.Message):
 async def premium_cmd(message: types.Message):
     couple = await get_user_couple(message.from_user.id)
     
+    # Если премиум уже есть, показываем кнопку "Как пользоваться"
     if couple.is_premium:
-        # Если премиум уже есть, показываем кнопку "Как пользоваться"
         text = "✅ <b>У вас уже есть Премиум!</b>\n\nНажмите кнопку ниже, чтобы узнать, как пользоваться всеми премиум-функциями."
         builder = InlineKeyboardBuilder()
         builder.row(InlineKeyboardButton(text="ℹ️ Как пользоваться Премиумом", callback_data="premium_details"))
