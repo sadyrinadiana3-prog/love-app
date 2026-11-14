@@ -258,7 +258,6 @@ HTML_PAGE = """
         let tg = window.Telegram.WebApp; tg.expand();
         let currentData = {};
         let alertShown = false;
-        // Пытаемся взять ID из Telegram. Если не получилось — ставим 0 (сервер сам разберется)
         let userId = tg.initDataUnsafe?.user?.id || 0;
         let isPremium = false;
 
@@ -282,10 +281,10 @@ HTML_PAGE = """
         }
 
         async function loadData() {
-            // СРАЗУ рисуем палитру
             renderPalette('bgPalette', 'bgColor', true);
             renderPalette('btnPalette', 'btnColor', true);
-            
+            document.getElementById('days').innerText = "✈️ Загрузка данных...";
+
             try {
                 let res = await fetch(`/api/data?user_id=${userId}`); 
                 if (!res.ok) throw new Error("Ошибка сервера");
