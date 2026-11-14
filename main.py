@@ -40,7 +40,7 @@ async def get_user_couple(user_id: int, create_if_missing=True):
     async with async_session() as session:
         try:
             result = await session.execute(select(Couple).where((Couple.user1_id == user_id) | (Couple.user2_id == user_id)))
-            couple = result.scalars().first() # Берем первую попавшуюся, если есть дубликаты
+            couple = result.scalars().first()
             
             if not couple and create_if_missing:
                 new_code = f"LOVE-{uuid.uuid4().hex[:4].upper()}"
@@ -58,7 +58,6 @@ async def get_user_couple(user_id: int, create_if_missing=True):
         except Exception as e:
             logger.error(f"Ошибка базы данных для user_id {user_id}: {e}")
             await session.rollback()
-            # Если произошла ошибка, создаем новую запись с нуля
             new_code = f"LOVE-{uuid.uuid4().hex[:4].upper()}"
             couple = Couple(user1_id=user_id, invite_code=new_code, data_json={
                 "meet_date": None, "plans": [], "packing": [], "notes": [], 
