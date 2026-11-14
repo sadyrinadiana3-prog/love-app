@@ -22,9 +22,7 @@ class Couple(Base):
 
 async def init_db():
     async with engine.begin() as conn:
-        # 1. Создаем таблицу, если её нет (данные не тронутся)
         await conn.run_sync(Base.metadata.create_all)
-        # 2. Безопасно добавляем индексы, если их нет (данные сохранятся)
         try:
             await conn.execute(text('CREATE INDEX IF NOT EXISTS ix_couples_user1_id ON couples (user1_id);'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS ix_couples_user2_id ON couples (user2_id);'))
