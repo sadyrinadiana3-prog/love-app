@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, CommandObject
@@ -15,6 +15,9 @@ import logging
 import io
 from PIL import Image, ImageDraw, ImageFont
 
+# Библиотека для ЮKassa (СБП)
+from yookassa import Configuration, Payment
+
 from database import init_db, async_session, Couple
 from sqlalchemy import select
 
@@ -26,6 +29,13 @@ app = FastAPI()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 SERVER_URL = "https://love-app-rb47.onrender.com"
 MUSIC_URL = "https://example.com/love.mp3"
+
+# --- НАСТРОЙКИ ЮKASSA (СБП) ---
+# Покупатель вставит сюда свои ключи из личного кабинета ЮKassa
+YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID", "ВСТАВЬТЕ_СВОЙ_SHOP_ID")
+YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY", "ВСТАВЬТЕ_СВОЙ_SECRET_KEY")
+Configuration.account_id = YOOKASSA_SHOP_ID
+Configuration.secret_key = YOOKASSA_SECRET_KEY
 
 bot = Bot(token=BOT_TOKEN if BOT_TOKEN else "123:fake")
 dp = Dispatcher()
@@ -42,7 +52,7 @@ DAILY_QUESTIONS = [
     "За что ты благодарен партнеру сегодня?",
 ]
 
-# --- ОПТИМИЗАЦИЯ: Загружаем шрифты один раз при старте ---
+# --- ОПТИМИЗАЦИЯ: Загружаем шрифты один раз ---
 FONTS = {}
 def load_fonts():
     global FONTS
@@ -56,12 +66,6 @@ def load_fonts():
         FONTS['small'] = ImageFont.load_default()
 
 load_fonts()
-SPICER_QUESTIONS = [
-    "Хочешь ли ты устроить романтический ужин?",
-    "Хочешь ли ты поехать в спонтанное путешествие?",
-    "Хочешь ли ты попробовать что-то новое в постели?",
-    "Хочешь ли ты устроить сюрприз для партнера?",
-]
 
 # --- РАБОТА С БАЗОЙ ---
 async def get_user_couple(user_id: int, create_if_missing=True):
@@ -106,7 +110,6 @@ async def update_couple_data(couple_id: int, data: dict):
             couple.data_json = data
             await session.commit()
 
-# --- ОПТИМИЗАЦИЯ: Используем глобальные шрифты ---
 # --- ГЕНЕРАЦИЯ КАРТИНКИ ---
 def generate_report_image(data: dict) -> bytes:
     width, height = 800, 1000
@@ -115,24 +118,12 @@ def generate_report_image(data: dict) -> bytes:
     
     title = data.get("title", "💖 Наша пара 💖")
     draw.text((width//2, 50), title, fill="#ffffff", font=FONTS['title'], anchor="ma")
-    try:
-        font_title = ImageFont.truetype("/system/fonts/Roboto-Bold.ttf", 50)
-        font_text = ImageFont.truetype("/system/fonts/Roboto-Regular.ttf", 30)
-        font_small = ImageFont.truetype("/system/fonts/Roboto-Regular.ttf", 24)
-    except:
-        font_title = ImageFont.load_default()
-        font_text = ImageFont.load_default()
-        font_small = ImageFont.load_default()
-
-    title = data.get("title", "💖 Наша пара 💖")
-    draw.text((width//2, 50), title, fill="#ffffff", font=font_title, anchor="ma")
     
     y_offset = 150
     if data.get("meet_date"):
         meet = datetime.datetime.strptime(data["meet_date"], "%Y-%m-%d").date()
         days = (meet - datetime.date.today()).days
         draw.text((50, y_offset), f"✈️ До встречи: {days} дн.", fill="#64b5f6", font=FONTS['text'])
-        draw.text((50, y_offset), f"✈️ До встречи: {days} дн.", fill="#64b5f6", font=font_text)
         y_offset += 50
     if data.get("rel_date"):
         rel = datetime.datetime.strptime(data["rel_date"], "%Y-%m-%d").date()
@@ -141,10 +132,6 @@ def generate_report_image(data: dict) -> bytes:
         y_offset += 80
 
     draw.text((50, y_offset), "📋 Планы:", fill="#ff9800", font=FONTS['text'])
-        draw.text((50, y_offset), f"❤️ Вместе уже: {days} дн.", fill="#64b5f6", font=font_text)
-        y_offset += 80
-
-    draw.text((50, y_offset), "📋 Планы:", fill="#ff9800", font=font_text)
     y_offset += 40
     for i, p in enumerate(data.get("plans", []), 1):
         if y_offset > height - 100: break
@@ -154,17 +141,11 @@ def generate_report_image(data: dict) -> bytes:
     
     y_offset += 20
     draw.text((50, y_offset), "🎒 Вещи:", fill="#ff9800", font=FONTS['text'])
-        draw.text((70, y_offset), f"{mark} {i}. {p.get('text')}", fill="#ffffff", font=font_small)
-        y_offset += 35
-    
-    y_offset += 20
-    draw.text((50, y_offset), "🎒 Вещи:", fill="#ff9800", font=font_text)
     y_offset += 40
     for i, p in enumerate(data.get("packing", []), 1):
         if y_offset > height - 50: break
         mark = "✅" if p.get("done") else "🔸"
         draw.text((70, y_offset), f"{mark} {i}. {p.get('text')}", fill="#ffffff", font=FONTS['small'])
-        draw.text((70, y_offset), f"{mark} {i}. {p.get('text')}", fill="#ffffff", font=font_small)
         y_offset += 35
 
     buf = io.BytesIO()
@@ -202,7 +183,6 @@ HTML_PAGE = """
         .danger-btn { background: #e53935; margin-top: 20px; }
         .premium-btn { background: linear-gradient(45deg, #ff9800, #e91e63); margin-top: 20px; }
         .premium-section { border: 2px dashed #ff9800; padding: 10px; border-radius: 10px; margin-top: 20px; }
-        .spicer-btn { background: #9c27b0; margin: 5px; width: auto; padding: 10px 20px; }
     </style>
 </head>
 <body>
@@ -243,13 +223,6 @@ HTML_PAGE = """
         <h3>🎮 Игра Spicer</h3>
         <p>Откройте игру в отдельном окне!</p>
         <button onclick="openSpicer()" style="background:#9c27b0;">🎮 Играть в Spicer</button>
-        <p>Ответьте на вопросы, и если ответы совпадут, вы увидите это!</p>
-        <div id="spicerGame">
-            <div id="spicerQuestion" style="margin: 10px 0; font-weight: bold;"></div>
-            <button onclick="answerSpicer(true)" class="spicer-btn">✅ Да</button>
-            <button onclick="answerSpicer(false)" class="spicer-btn">❌ Нет</button>
-            <div id="spicerResult" style="margin-top: 10px;"></div>
-        </div>
     </div>
 
     <div class="card bottom-settings">
@@ -290,16 +263,8 @@ HTML_PAGE = """
         let alertShown = false;
         let userId = tg.initDataUnsafe?.user?.id || 0;
         let isPremium = false;
-        let spicerQuestions = [
-            "Хочешь ли ты устроить романтический ужин?",
-            "Хочешь ли ты поехать в спонтанное путешествие?",
-            "Хочешь ли ты попробовать что-то новое в постели?",
-            "Хочешь ли ты устроить сюрприз для партнера?"
-        ];
-        let currentSpicerIndex = 0;
 
         function openSpicer() {
-            // Открываем игру по ссылке (это отдельная страница)
             window.open('/spicer_game', '_blank');
         }
 
@@ -336,26 +301,6 @@ HTML_PAGE = """
             
             document.getElementById('premiumStatus').innerText = isPremium ? "✅ Премиум активен! Вам доступны эксклюзивные цвета." : "❌ Премиум не активен.";
             document.getElementById('buyPremiumBtn').style.display = isPremium ? 'none' : 'block';
-            
-            loadSpicer();
-        }
-
-        function loadSpicer() {
-            if (!currentData.spicer_answers) currentData.spicer_answers = {};
-            if (currentSpicerIndex >= spicerQuestions.length) {
-                document.getElementById('spicerQuestion').innerText = "Вы ответили на все вопросы!";
-                document.getElementById('spicerResult').innerText = "Посмотрите, совпали ли ваши ответы.";
-                return;
-            }
-            document.getElementById('spicerQuestion').innerText = spicerQuestions[currentSpicerIndex];
-        }
-
-        async function answerSpicer(answer) {
-            if (!currentData.spicer_answers) currentData.spicer_answers = {};
-            currentData.spicer_answers[currentSpicerIndex] = answer;
-            await saveData();
-            currentSpicerIndex++;
-            loadSpicer();
         }
 
         function updateUI() {
@@ -435,7 +380,7 @@ HTML_PAGE = """
 </html>
 """
 
-# --- НОВАЯ СТРАНИЦА ДЛЯ ИГРЫ SPICER ---
+# --- СТРАНИЦА ДЛЯ ИГРЫ SPICER ---
 SPICER_PAGE = """
 <!DOCTYPE html>
 <html>
@@ -597,6 +542,7 @@ async def start(message: types.Message):
         f"<b>💎 Премиум:</b>\n"
         f"• /premium — узнать все подробности о функциях\n"
         f"• /buy_premium — купить Премиум за 50 Stars\n"
+        f"• /buy_sbp — купить Премиум (СБП/карта)\n"
         f"• Статус: {premium_status}\n\n"
         f"<b>🛠 Основные команды:</b>\n"
         f"📅 /дата 2026-12-31\n"
@@ -642,11 +588,11 @@ async def premium_details(callback: types.CallbackQuery):
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=None)
     await callback.answer()
 
-# --- ОТДЕЛЬНАЯ КОМАНДА ДЛЯ ПОКУПКИ ---
+# --- ОПЛАТА ЧЕРЕЗ TELEGRAM STARS ---
 @dp.message(F.text == "/buy_premium")
 async def buy_premium_cmd(message: types.Message):
     text = (
-        "💎 <b>Покупка Премиум-подписки</b>\n\n"
+        "💎 <b>Покупка Премиум-подписки (Telegram Stars)</b>\n\n"
         "Нажмите на кнопку ниже, чтобы оплатить подписку через Telegram Stars."
     )
     
@@ -664,6 +610,78 @@ async def buy_premium_cmd(message: types.Message):
         reply_markup=builder.as_markup()
     )
 
+# --- ОПЛАТА ЧЕРЕЗ СБП (ЮKASSA) ---
+@dp.message(F.text == "/buy_sbp")
+async def buy_sbp_cmd(message: types.Message):
+    if YOOKASSA_SHOP_ID == "ВСТАВЬТЕ_СВОЙ_SHOP_ID" or YOOKASSA_SECRET_KEY == "ВСТАВЬТЕ_СВОЙ_SECRET_KEY":
+        await message.answer("❌ Оплата по СБП не настроена. Пожалуйста, обратитесь к администратору бота.")
+        return
+
+    try:
+        # Создаем платеж в ЮKassa с методом СБП
+        payment = Payment.create({
+            "amount": {
+                "value": "50.00",
+                "currency": "RUB"
+            },
+            "payment_method_data": {
+                "type": "sbp"  # Указываем метод СБП
+            },
+            "confirmation": {
+                "type": "redirect",
+                "return_url": SERVER_URL  # Куда вернется пользователь после оплаты
+            },
+            "capture": True,
+            "description": "Премиум Love App (СБП)",
+            "metadata": {
+                "user_id": message.from_user.id
+            }
+        }, uuid.uuid4())
+
+        # Отправляем ссылку на оплату
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text="💳 Оплатить по СБП", url=payment.confirmation.confirmation_url))
+        await message.answer(
+            "💎 <b>Покупка Премиум-подписки (СБП)</b>\n\n"
+            "Нажмите на кнопку ниже, чтобы перейти на страницу оплаты ЮKassa (СБП).\n"
+            f"Сумма: <b>50 ₽</b>",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.error(f"Ошибка ЮKassa: {e}")
+        await message.answer("❌ Произошла ошибка при создании платежа. Попробуйте позже или используйте Telegram Stars.")
+
+# --- ВЕБХУК ДЛЯ ЮKASSA (УВЕДОМЛЕНИЕ ОБ ОПЛАТЕ) ---
+@app.post("/yookassa/webhook")
+async def yookassa_webhook(request: Request):
+    try:
+        body = await request.json()
+        event = body.get("event")
+        
+        if event == "payment.succeeded":
+            payment_object = body.get("object", {})
+            metadata = payment_object.get("metadata", {})
+            user_id = metadata.get("user_id")
+            
+            if user_id:
+                couple = await get_user_couple(int(user_id))
+                async with async_session() as session:
+                    result = await session.execute(select(Couple).where(Couple.id == couple.id))
+                    c = result.scalar_one_or_none()
+                    if c:
+                        c.is_premium = True
+                        await session.commit()
+                # Отправляем уведомление пользователю
+                try:
+                    await bot.send_message(int(user_id), "🎉 <b>Оплата по СБП прошла успешно!</b> Премиум активирован навсегда.", parse_mode="HTML")
+                except:
+                    pass
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Ошибка вебхука: {e}")
+        return {"status": "error"}
+
 @dp.pre_checkout_query()
 async def pre_checkout(query: PreCheckoutQuery):
     await query.answer(ok=True)
@@ -677,7 +695,7 @@ async def success_payment(message: types.Message):
         if c:
             c.is_premium = True
             await session.commit()
-    await message.answer("🎉 <b>Оплата прошла успешно!</b> Премиум активирован навсегда. Откройте окно, чтобы увидеть новые цвета!", parse_mode="HTML")
+    await message.answer("🎉 <b>Оплата Stars прошла успешно!</b> Премиум активирован навсегда. Откройте окно, чтобы увидеть новые цвета!", parse_mode="HTML")
 
 # --- СЕКРЕТНАЯ КОМАНДА ДЛЯ ВЛАДЕЛЬЦА ---
 @dp.message(F.text == "/L0v3_Adm1n_Pr3m1um_2026_X9z")
@@ -695,65 +713,6 @@ async def admin_premium(message: types.Message):
             await session.commit()
     await message.answer("🎉 <b>Админ-доступ:</b> Премиум активирован навсегда для вашего аккаунта!", parse_mode="HTML")
 
-# --- НОВЫЕ ПРЕМИУМ-КОМАНДЫ ---
-@dp.message(F.text == "/капсула")
-async def capsule_cmd(message: types.Message):
-    couple = await get_user_couple(message.from_user.id)
-    if not couple.is_premium:
-        await message.answer("❌ Эта функция доступна только с Премиумом. Напиши /premium.")
-        return
-    await message.answer("⏳ <b>Создание капсулы времени</b>\n\nНапиши дату (в формате ГГГГ-ММ-ДД), когда должно открыться сообщение, и через пробел текст.\n\nПример: <code>/капсула 2026-12-31 С Новым Годом, любимая!</code>", parse_mode="HTML")
-
-@dp.message(F.text.startswith("/капсула "))
-async def create_capsule(message: types.Message):
-    couple = await get_user_couple(message.from_user.id)
-    if not couple.is_premium:
-        return
-    try:
-        parts = message.text.replace("/капсула ", "").split(" ", 1)
-        date_str = parts[0]
-        text_msg = parts[1]
-        datetime.datetime.strptime(date_str, "%Y-%m-%d")
-        
-        data = couple.data_json
-        if "capsules" not in data:
-            data["capsules"] = []
-        data["capsules"].append({"date": date_str, "text": text_msg, "sent": False})
-        await update_couple_data(couple.id, data)
-        await message.answer(f"✅ Капсула создана! Она откроется {date_str}.", parse_mode="HTML")
-    except:
-        await message.answer("❌ Ошибка формата. Пример: <code>/капсула 2026-12-31 Текст</code>", parse_mode="HTML")
-
-@dp.message(F.text == "/вопрос")
-async def daily_question(message: types.Message):
-    couple = await get_user_couple(message.from_user.id)
-    if not couple.is_premium:
-        await message.answer("❌ Эта функция доступна только с Премиумом. Напиши /premium.")
-        return
-    
-    question = random.choice(DAILY_QUESTIONS)
-    data = couple.data_json
-    data["daily_question"] = question
-    data["partner_answer"] = None
-    await update_couple_data(couple.id, data)
-    
-    await message.answer(f"❓ <b>Вопрос дня:</b>\n\n{question}\n\nОтветьте на него командой <code>/ответ Твой текст</code>", parse_mode="HTML")
-
-@dp.message(F.text.startswith("/ответ "))
-async def answer_question(message: types.Message):
-    couple = await get_user_couple(message.from_user.id)
-    if not couple.is_premium:
-        return
-    answer = message.text.replace("/ответ ", "").strip()
-    data = couple.data_json
-    if data.get("partner_answer"):
-        await message.answer("❌ Ваш партнер уже ответил на этот вопрос.")
-        return
-    
-    data["partner_answer"] = answer
-    await update_couple_data(couple.id, data)
-    await message.answer("✅ Ваш ответ сохранен! Теперь партнер тоже может ответить.")
-
 # --- ОСТАЛЬНЫЕ КОМАНДЫ (гайд, план, отчет и т.д.) ---
 @dp.message(F.text == "/гайд")
 async def guide(message: types.Message):
@@ -769,7 +728,8 @@ async def guide(message: types.Message):
         "📅 /дата 2026-12-31\n❤️ /отношения 2024-01-01\n📊 /дни\n📋 /план Текст\n🎒 /вещь Текст\n📝 /заметка Текст\n📋 /отчет\n🏷 /название Имя\n🎨 /стиль #17212b #e91e63 24px italic\n\n"
         "💎 <b>4. Премиум:</b>\n"
         "Напиши /premium, чтобы узнать о премиум-функциях.\n"
-        "Напиши /buy_premium, чтобы купить.\n"
+        "Напиши /buy_premium, чтобы купить за Stars.\n"
+        "Напиши /buy_sbp, чтобы купить по СБП.\n"
         "После активации доступны: /капсула, /вопрос.\n\n"
         "🗑 <b>5. Удаление:</b>\n"
         "❌ /удалить_план 1\n❌ /удалить_вещь 1\n❌ /удалить_заметку 1\n🗑 /очистить"
@@ -793,7 +753,8 @@ async def help_cmd(message: types.Message):
         "🎨 /стиль [цвет_фона] [цвет_кнопок] [размер_шрифта] [стиль]\n"
         "👫 /мой_код - получить код для приглашения партнера\n"
         "💎 /premium - узнать о премиуме\n"
-        "🛒 /buy_premium - купить премиум\n"
+        "🛒 /buy_premium - купить премиум (Stars)\n"
+        "💳 /buy_sbp - купить премиум (СБП)\n"
         "⏳ /капсула - создать капсулу времени (премиум)\n"
         "❓ /вопрос - вопрос дня (премиум)\n"
         "✍️ /ответ - ответить на вопрос (премиум)\n\n"
@@ -975,7 +936,6 @@ async def check_background_tasks():
                 for couple in couples:
                     data = couple.data_json
                     if data:
-                        # 1. Проверка капсул
                         if "capsules" in data:
                             capsules = data["capsules"]
                             for cap in capsules:
@@ -991,7 +951,6 @@ async def check_background_tasks():
                                             except:
                                                 pass
                         
-                        # 2. Ежемесячная аналитика (1-е число месяца)
                         if data.get("last_analytics_date") != current_month and datetime.date.today().day == 1:
                             data["last_analytics_date"] = current_month
                             couple.data_json = data
@@ -1112,3 +1071,4 @@ async def run_bot():
 async def startup_event():
     await init_db()
     asyncio.create_task(run_bot())
+    asyncio.create_task(check_background_tasks())
