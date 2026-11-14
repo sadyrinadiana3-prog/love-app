@@ -13,7 +13,6 @@ import uuid
 import os
 import logging
 
-# Библиотека для ЮKassa (СБП)
 try:
     from yookassa import Configuration, Payment
     YOOKASSA_AVAILABLE = True
@@ -45,7 +44,13 @@ LOVE_QUOTES = [
     "«Для честной любви даже самое маленькое расстояние — слишком большое, но даже самое большое расстояние — преодолимо.»",
 ]
 
-# --- РАБОТА С БАЗОЙ ---
+DAILY_QUESTIONS = [
+    "Что ты ценишь в партнере больше всего?",
+    "Какой ваш самый счастливый момент вместе?",
+    "Что бы ты хотел сделать вместе в следующем году?",
+    "За что ты благодарен партнеру сегодня?",
+]
+
 async def get_user_couple(user_id: int, create_if_missing=True):
     async with async_session() as session:
         try:
@@ -83,7 +88,6 @@ async def update_couple_data(couple_id: int, data: dict):
             couple.data_json = data
             await session.commit()
 
-# --- САЙТ (ОКНО) ---
 HTML_PAGE = """ 
 <!DOCTYPE html>
 <html>
@@ -277,7 +281,7 @@ HTML_PAGE = """
             tg.showAlert("Для покупки перейдите в чат с ботом и напишите /premium");
         }
 
-        async def saveData() {
+        async function saveData() {
             await fetch(`/api/data?user_id=${userId}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(currentData) });
             updateUI();
         }
@@ -307,7 +311,6 @@ HTML_PAGE = """
 </html>
 """
 
-# --- API ---
 @app.get("/api/premium_status")
 async def premium_status(user_id: int):
     couple = await get_user_couple(user_id)
@@ -342,7 +345,6 @@ async def unlink_partner(user_id: int):
             await session.commit()
     return {"status": "ok"}
 
-# --- БОТ ---
 @dp.message(CommandStart(deep_link=True))
 async def start_with_code(message: types.Message, command: CommandObject):
     user_id = message.from_user.id
@@ -370,7 +372,7 @@ async def start(message: types.Message):
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="💖 Открыть наше окно", web_app=WebAppInfo(url=SERVER_URL)))
     
-    premium_status = "✅ У вас есть Премиум!" if couple.is_premium else "💎 У вас нет Премиума."
+    premium_text = "✅ У вас есть Премиум!" if couple.is_premium else "💎 У вас нет Премиума."
     
     text = (
         f"Привет! Твой код приглашения для партнера:\n<code>{couple.invite_code}</code>\n\n"
@@ -380,7 +382,7 @@ async def start(message: types.Message):
         f"• /premium — подробности и функции\n"
         f"• /buy_premium — купить за Stars\n"
         f"• /buy_sbp — купить по СБП\n"
-        f"• Статус: {premium_status}\n\n"
+        f"• Статус: {premium_text}\n\n"
         f"<i>Подробнее — /гайд</i>"
     )
     
