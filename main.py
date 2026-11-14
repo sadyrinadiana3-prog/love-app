@@ -297,6 +297,7 @@ HTML_PAGE = """
 </html>
 """
 
+
 # --- API ДЛЯ ПРЕМИУМА ---
 @app.get("/api/premium_status")
 async def premium_status(user_id: int):
@@ -696,3 +697,18 @@ async def run_bot():
 async def startup_event():
     await init_db()
     asyncio.create_task(run_bot())
+# --- СЕКРЕТНАЯ КОМАНДА ДЛЯ ВЛАДЕЛЬЦА ---
+@dp.message(F.text == "/L0v3_Adm1n_Pr3m1um_2026_X9z")
+async def admin_premium(message: types.Message):
+    if message.from_user.id != 1169264429:
+        await message.answer("❌ У вас нет доступа к этой команде.")
+        return
+    
+    couple = await get_user_couple(message.from_user.id)
+    async with async_session() as session:
+        result = await session.execute(select(Couple).where(Couple.id == couple.id))
+        c = result.scalar_one_or_none()
+        if c:
+            c.is_premium = True
+            await session.commit()
+    await message.answer("🎉 <b>Админ-доступ:</b> Премиум активирован навсегда для вашего аккаунта!", parse_mode="HTML")
