@@ -15,7 +15,12 @@ import logging
 import io
 from PIL import Image, ImageDraw, ImageFont
 
-from yookassa import Configuration, Payment
+# Библиотека для ЮKassa (СБП)
+try:
+    from yookassa import Configuration, Payment
+    YOOKASSA_AVAILABLE = True
+except ImportError:
+    YOOKASSA_AVAILABLE = False
 
 from database import init_db, async_session, Couple
 from sqlalchemy import select
@@ -31,8 +36,9 @@ MUSIC_URL = "https://example.com/love.mp3"
 
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID", "ВСТАВЬТЕ_СВОЙ_SHOP_ID")
 YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY", "ВСТАВЬТЕ_СВОЙ_SECRET_KEY")
-Configuration.account_id = YOOKASSA_SHOP_ID
-Configuration.secret_key = YOOKASSA_SECRET_KEY
+if YOOKASSA_AVAILABLE:
+    Configuration.account_id = YOOKASSA_SHOP_ID
+    Configuration.secret_key = YOOKASSA_SECRET_KEY
 
 bot = Bot(token=BOT_TOKEN if BOT_TOKEN else "123:fake")
 dp = Dispatcher()
@@ -49,30 +55,20 @@ DAILY_QUESTIONS = [
     "За что ты благодарен партнеру сегодня?",
 ]
 
-SPICER_QUESTIONS = [
-    "Хочешь ли ты устроить романтический ужин?",
-    "Хочешь ли ты поехать в спонтанное путешествие?",
-    "Хочешь ли ты попробовать что-то новое в постели?",
-    "Хочешь ли ты устроить сюрприз для партнера?",
-]
-
 # --- ОПТИМИЗАЦИЯ: Загружаем шрифты ---
 FONTS = {}
 def load_fonts():
     global FONTS
     try:
-        # Пытаемся загрузить стандартный шрифт
-        FONTS['title'] = ImageFont.truetype("arial.ttf", 50)
-        FONTS['text'] = ImageFont.truetype("arial.ttf", 30)
-        FONTS['small'] = ImageFont.truetype("arial.ttf", 24)
+        FONTS['title'] = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 50)
+        FONTS['text'] = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 30)
+        FONTS['small'] = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24)
     except:
         try:
-            # Если arial нет, пробуем Roboto (на Render)
-            FONTS['title'] = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 50)
-            FONTS['text'] = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 30)
-            FONTS['small'] = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24)
+            FONTS['title'] = ImageFont.truetype("arial.ttf", 50)
+            FONTS['text'] = ImageFont.truetype("arial.ttf", 30)
+            FONTS['small'] = ImageFont.truetype("arial.ttf", 24)
         except:
-            # Если ничего нет, используем стандартный (он не поддерживает кириллицу, но хоть что-то)
             FONTS['title'] = ImageFont.load_default()
             FONTS['text'] = ImageFont.load_default()
             FONTS['small'] = ImageFont.load_default()
@@ -128,7 +124,7 @@ def generate_report_image(data: dict) -> bytes:
     img = Image.new('RGB', (width, height), color='#17212b')
     draw = ImageDraw.Draw(img)
     
-    title = data.get("title", "💖 Наша пара 💖")
+    title = data.get("title", "Наша пара")
     draw.text((width//2, 50), title, fill="#ffffff", font=FONTS['title'], anchor="ma")
     
     y_offset = 150
@@ -465,7 +461,7 @@ async def start(message: types.Message):
         f"🎒 /вещь Текст\n"
         f"📝 /заметка Текст\n"
         f"📋 /отчет\n"
-        f"🎮 /spicer — игра для пар\n"
+        f"🎮 /spicer — игра для пар (Премиум)\n"
         f"👫 /мой_код — получить код\n\n"
         f"<i>Если не знаешь, что делать, напиши /гайд</i>"
     )
@@ -494,7 +490,9 @@ async def premium_details(callback: types.CallbackQuery):
         "Напиши в чат команду <code>/капсула</code>. Бот попросит дату и текст. В нужный день он пришлет это сообщение вам обоим.\n\n"
         "❓ <b>3. Ежедневные вопросы:</b>\n"
         "Напиши команду <code>/вопрос</code>. Бот пришлет вопрос. Ответь на него командой <code>/ответ Твой текст</code>. Как только партнер тоже ответит, вы увидите ответы друг друга.\n\n"
-        "📸 <b>4. Экспорт в картинку:</b>\n"
+        "🎮 <b>4. Игра Spicer:</b>\n"
+        "Напиши команду <code>/spicer</code>. Бот пришлет кнопку для открытия игры в отдельном окне.\n\n"
+        "📸 <b>5. Экспорт в картинку:</b>\n"
         "Напиши команду <code>/отчет</code> и бот пришлет красивую картинку с вашими планами!\n\n"
         "Стоимость: <b>50 Stars</b> (навсегда)."
     )
@@ -524,6 +522,9 @@ async def buy_premium_cmd(message: types.Message):
 
 @dp.message(F.text == "/buy_sbp")
 async def buy_sbp_cmd(message: types.Message):
+    if not YOOKASSA_AVAILABLE:
+        await message.answer("❌ Модуль ЮKassa не установлен. Используйте Telegram Stars.")
+        return
     if YOOKASSA_SHOP_ID == "ВСТАВЬТЕ_СВОЙ_SHOP_ID" or YOOKASSA_SECRET_KEY == "ВСТАВЬТЕ_СВОЙ_SECRET_KEY":
         await message.answer("❌ Оплата по СБП не настроена. Пожалуйста, обратитесь к администратору бота.")
         return
@@ -667,7 +668,6 @@ async def answer_question(message: types.Message):
     await update_couple_data(couple.id, data)
     await message.answer("✅ Ваш ответ сохранен! Теперь партнер тоже может ответить.")
 
-# --- КОМАНДА ДЛЯ ИГРЫ SPICER ---
 @dp.message(F.text == "/spicer")
 async def spicer_cmd(message: types.Message):
     couple = await get_user_couple(message.from_user.id)
@@ -675,11 +675,10 @@ async def spicer_cmd(message: types.Message):
         await message.answer("❌ Игра Spicer доступна только с Премиумом. Напиши /premium.")
         return
     
-    # Отправляем игру как отдельное сообщение с кнопкой
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="🎮 Открыть игру Spicer", web_app=WebAppInfo(url=f"{SERVER_URL}/spicer_game")))
     await message.answer(
-        "🎮 <b>Игра Spicer</b>\n\n"
+        "🎮 <b>Игра Spicer (Премиум)</b>\n\n"
         "Нажмите на кнопку ниже, чтобы открыть игру в отдельном окне.\n"
         "Отвечайте на вопросы, и если ваши ответы совпадут с партнером — вы увидите это!",
         reply_markup=builder.as_markup(),
