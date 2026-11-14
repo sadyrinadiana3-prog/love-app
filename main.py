@@ -15,7 +15,6 @@ import logging
 import io
 from PIL import Image, ImageDraw, ImageFont
 
-# Библиотека для ЮKassa (СБП)
 try:
     from yookassa import Configuration, Payment
     YOOKASSA_AVAILABLE = True
@@ -55,7 +54,6 @@ DAILY_QUESTIONS = [
     "За что ты благодарен партнеру сегодня?",
 ]
 
-# --- ОПТИМИЗАЦИЯ: Загружаем шрифты ---
 FONTS = {}
 def load_fonts():
     global FONTS
@@ -75,7 +73,6 @@ def load_fonts():
 
 load_fonts()
 
-# --- РАБОТА С БАЗОЙ ---
 async def get_user_couple(user_id: int, create_if_missing=True):
     async with async_session() as session:
         try:
@@ -118,7 +115,6 @@ async def update_couple_data(couple_id: int, data: dict):
             couple.data_json = data
             await session.commit()
 
-# --- ГЕНЕРАЦИЯ КАРТИНКИ ---
 def generate_report_image(data: dict) -> bytes:
     width, height = 800, 1000
     img = Image.new('RGB', (width, height), color='#17212b')
@@ -161,7 +157,6 @@ def generate_report_image(data: dict) -> bytes:
     buf.seek(0)
     return buf.getvalue()
 
-# --- САЙТ (ОКНО) БЕЗ ИГРЫ ---
 HTML_PAGE = """ 
 <!DOCTYPE html>
 <html>
@@ -286,19 +281,25 @@ HTML_PAGE = """
         }
 
         async function loadData() {
-            let res = await fetch(`/api/data?user_id=${userId}`); 
-            currentData = await res.json(); 
-            
-            let premRes = await fetch(`/api/premium_status?user_id=${userId}`);
-            let premData = await premRes.json();
-            isPremium = premData.is_premium;
-            
-            updateUI();
-            renderPalette('bgPalette', 'bgColor', true);
-            renderPalette('btnPalette', 'btnColor', true);
-            
-            document.getElementById('premiumStatus').innerText = isPremium ? "✅ Премиум активен! Вам доступны эксклюзивные цвета." : "❌ Премиум не активен.";
-            document.getElementById('buyPremiumBtn').style.display = isPremium ? 'none' : 'block';
+            try {
+                let res = await fetch(`/api/data?user_id=${userId}`); 
+                if (!res.ok) throw new Error("Ошибка сервера");
+                currentData = await res.json(); 
+                
+                let premRes = await fetch(`/api/premium_status?user_id=${userId}`);
+                let premData = await premRes.json();
+                isPremium = premData.is_premium;
+                
+                updateUI();
+                renderPalette('bgPalette', 'bgColor', true);
+                renderPalette('btnPalette', 'btnColor', true);
+                
+                document.getElementById('premiumStatus').innerText = isPremium ? "✅ Премиум активен! Вам доступны эксклюзивные цвета." : "❌ Премиум не активен.";
+                document.getElementById('buyPremiumBtn').style.display = isPremium ? 'none' : 'block';
+            } catch (e) {
+                console.error(e);
+                document.getElementById('days').innerText = "❌ Ошибка загрузки. Обновите страницу.";
+            }
         }
 
         function updateUI() {
@@ -378,7 +379,76 @@ HTML_PAGE = """
 </html>
 """
 
-# --- API ---
+# --- СТРАНИЦА ДЛЯ ИГРЫ SPICER (ИСПРАВЛЕНИЕ 404) ---
+SPICER_PAGE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #17212b; color: #fff; padding: 15px; text-align: center; }
+        .card { background: #232e3c; border-radius: 15px; padding: 20px; margin-bottom: 15px; }
+        button { width: 100%; padding: 15px; margin: 10px 0; border-radius: 8px; border: none; font-size: 18px; font-weight: bold; cursor: pointer; }
+        .yes { background: #43a047; color: white; }
+        .no { background: #e53935; color: white; }
+    </style>
+</head>
+<body>
+    <h2>🎮 Игра Spicer</h2>
+    <div class="card">
+        <div id="question" style="font-size: 20px; margin-bottom: 20px;"></div>
+        <button class="yes" onclick="answer(true)">✅ Да</button>
+        <button class="no" onclick="answer(false)">❌ Нет</button>
+        <div id="result" style="margin-top: 20px; font-weight: bold;"></div>
+    </div>
+    <script>
+        let tg = window.Telegram.WebApp; tg.expand();
+        let userId = tg.initDataUnsafe?.user?.id || 0;
+        let questions = [
+            "Хочешь ли ты устроить романтический ужин?",
+            "Хочешь ли ты поехать в спонтанное путешествие?",
+            "Хочешь ли ты попробовать что-то новое в постели?",
+            "Хочешь ли ты устроить сюрприз для партнера?"
+        ];
+        let currentIndex = 0;
+        let answers = {};
+
+        async function loadGame() {
+            let res = await fetch(`/api/game_data?user_id=${userId}`);
+            let data = await res.json();
+            answers = data.answers || {};
+            if (answers[currentIndex] !== undefined) currentIndex++;
+            updateUI();
+        }
+
+        function updateUI() {
+            if (currentIndex >= questions.length) {
+                document.getElementById('question').innerText = "Вы ответили на все вопросы!";
+                document.getElementById('result').innerText = "Посмотрите, совпали ли ваши ответы в основном окне.";
+                return;
+            }
+            document.getElementById('question').innerText = questions[currentIndex];
+        }
+
+        async function answer(val) {
+            answers[currentIndex] = val;
+            await fetch('/api/save_game_data', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({user_id: userId, answers: answers})
+            });
+            currentIndex++;
+            updateUI();
+        }
+
+        loadGame();
+    </script>
+</body>
+</html>
+"""
+
 @app.get("/api/premium_status")
 async def premium_status(user_id: int):
     couple = await get_user_couple(user_id)
@@ -387,6 +457,10 @@ async def premium_status(user_id: int):
 @app.get("/", response_class=HTMLResponse)
 async def index():
     return HTML_PAGE
+
+@app.get("/spicer_game", response_class=HTMLResponse)
+async def spicer_game():
+    return SPICER_PAGE
 
 @app.get("/api/data")
 async def get_data(user_id: int):
@@ -397,6 +471,21 @@ async def get_data(user_id: int):
 async def update_data(data: dict, user_id: int):
     couple = await get_user_couple(user_id)
     await update_couple_data(couple.id, data)
+    return {"status": "ok"}
+
+@app.get("/api/game_data")
+async def game_data(user_id: int):
+    couple = await get_user_couple(user_id)
+    return {"answers": couple.data_json.get("spicer_answers", {})}
+
+@app.post("/api/save_game_data")
+async def save_game_data(data: dict):
+    user_id = data.get("user_id")
+    answers = data.get("answers")
+    couple = await get_user_couple(user_id)
+    json_data = couple.data_json
+    json_data["spicer_answers"] = answers
+    await update_couple_data(couple.id, json_data)
     return {"status": "ok"}
 
 @app.post("/api/unlink")
@@ -413,7 +502,6 @@ async def unlink_partner(user_id: int):
             await session.commit()
     return {"status": "ok"}
 
-# --- БОТ (КОМАНДЫ) ---
 @dp.message(CommandStart(deep_link=True))
 async def start_with_code(message: types.Message, command: CommandObject):
     user_id = message.from_user.id
