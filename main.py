@@ -3,7 +3,8 @@ from fastapi.responses import HTMLResponse
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, CommandObject
 from aiogram.types import (InlineKeyboardButton, WebAppInfo, InlineQueryResultArticle, 
-                           InlineQueryResultPhoto, InputTextMessageContent, InlineQueryResultsButton)
+                           InlineQueryResultPhoto, InputTextMessageContent, InlineQueryResultsButton,
+                           LabeledPrice, PreCheckoutQuery)
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import datetime
 import random
@@ -371,7 +372,7 @@ async def start(message: types.Message):
         parse_mode="HTML"
     )
 
-# --- ПРЕМИУМ (УПРОЩЕННЫЙ ВАРИАНТ БЕЗ ОПЛАТЫ) ---
+# --- ПРЕМИУМ (ИНФОРМАЦИЯ) ---
 @dp.message(F.text == "/premium")
 async def premium_cmd(message: types.Message):
     text = (
@@ -400,6 +401,43 @@ async def premium_details(callback: types.CallbackQuery):
     )
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=None)
     await callback.answer()
+
+# --- ОТДЕЛЬНАЯ КОМАНДА ДЛЯ ПОКУПКИ ---
+@dp.message(F.text == "/buy_premium")
+async def buy_premium_cmd(message: types.Message):
+    text = (
+        "💎 <b>Покупка Премиум-подписки</b>\n\n"
+        "Нажмите на кнопку ниже, чтобы оплатить подписку через Telegram Stars."
+    )
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="⭐ Оплатить 50 Stars", pay=True))
+    
+    prices = [LabeledPrice(label="XTR", amount=50)]
+    await message.answer_invoice(
+        title="Премиум Love App",
+        description="Эксклюзивные цвета, капсулы времени и другие функции.",
+        prices=prices,
+        provider_token="",
+        payload="premium_50",
+        currency="XTR",
+        reply_markup=builder.as_markup()
+    )
+
+@dp.pre_checkout_query()
+async def pre_checkout(query: PreCheckoutQuery):
+    await query.answer(ok=True)
+
+@dp.message(F.successful_payment)
+async def success_payment(message: types.Message):
+    couple = await get_user_couple(message.from_user.id)
+    async with async_session() as session:
+        result = await session.execute(select(Couple).where(Couple.id == couple.id))
+        c = result.scalar_one_or_none()
+        if c:
+            c.is_premium = True
+            await session.commit()
+    await message.answer("🎉 <b>Оплата прошла успешно!</b> Премиум активирован навсегда. Откройте окно, чтобы увидеть новые цвета!", parse_mode="HTML")
 
 # --- СЕКРЕТНАЯ КОМАНДА ДЛЯ ВЛАДЕЛЬЦА ---
 @dp.message(F.text == "/L0v3_Adm1n_Pr3m1um_2026_X9z")
@@ -491,6 +529,7 @@ async def guide(message: types.Message):
         "📅 /дата 2026-12-31\n❤️ /отношения 2024-01-01\n📊 /дни\n📋 /план Текст\n🎒 /вещь Текст\n📝 /заметка Текст\n📋 /отчет\n🏷 /название Имя\n🎨 /стиль #17212b #e91e63 24px italic\n\n"
         "💎 <b>4. Премиум:</b>\n"
         "Напиши /premium, чтобы узнать о премиум-функциях.\n"
+        "Напиши /buy_premium, чтобы купить.\n"
         "После активации доступны: /капсула, /вопрос.\n\n"
         "🗑 <b>5. Удаление:</b>\n"
         "❌ /удалить_план 1\n❌ /удалить_вещь 1\n❌ /удалить_заметку 1\n🗑 /очистить"
@@ -514,6 +553,7 @@ async def help_cmd(message: types.Message):
         "🎨 /стиль [цвет_фона] [цвет_кнопок] [размер_шрифта] [стиль]\n"
         "👫 /мой_код - получить код для приглашения партнера\n"
         "💎 /premium - узнать о премиуме\n"
+        "🛒 /buy_premium - купить премиум\n"
         "⏳ /капсула - создать капсулу времени (премиум)\n"
         "❓ /вопрос - вопрос дня (премиум)\n"
         "✍️ /ответ - ответить на вопрос (премиум)\n\n"
