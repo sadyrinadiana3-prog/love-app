@@ -354,23 +354,37 @@ async def start_with_code(message: types.Message, command: CommandObject):
     builder.row(InlineKeyboardButton(text="💖 Открыть наше окно", web_app=WebAppInfo(url=SERVER_URL)))
     await message.answer("Нажми на кнопку ниже.", reply_markup=builder.as_markup())
 
+# --- ОБНОВЛЕННЫЙ START ---
 @dp.message(CommandStart())
 async def start(message: types.Message):
     couple = await get_user_couple(message.from_user.id)
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="💖 Открыть наше окно", web_app=WebAppInfo(url=SERVER_URL)))
     
-    premium_text = "✅ У вас есть Премиум!" if couple.is_premium else "💎 У вас нет Премиума. Напишите /premium, чтобы узнать больше."
+    premium_status = "✅ У вас есть Премиум!" if couple.is_premium else "💎 У вас нет Премиума."
     
-    await message.answer(
-        f"Привет! Твой код приглашения для партнера:\n<code>{couple.invite_code}</code>\n\n"
+    text = (
+        f"Привет! Твой код приглашения для партнера:\n"
+        f"<code>{couple.invite_code}</code>\n\n"
         f"Скинь его партнеру или отправь ссылку:\n"
         f"https://t.me/{(await bot.get_me()).username}?start={couple.invite_code}\n\n"
-        f"{premium_text}\n\n"
-        f"Если не знаешь, что делать, напиши /гайд", 
-        reply_markup=builder.as_markup(), 
-        parse_mode="HTML"
+        f"<b>💎 Премиум:</b>\n"
+        f"• /premium — узнать все подробности о функциях\n"
+        f"• /buy_premium — купить Премиум за 50 Stars\n"
+        f"• Статус: {premium_status}\n\n"
+        f"<b>🛠 Основные команды:</b>\n"
+        f"📅 /дата 2026-12-31\n"
+        f"❤️ /отношения 2024-01-01\n"
+        f"📊 /дни\n"
+        f"📋 /план Текст\n"
+        f"🎒 /вещь Текст\n"
+        f"📝 /заметка Текст\n"
+        f"📋 /отчет\n"
+        f"👫 /мой_код — получить код\n\n"
+        f"<i>Если не знаешь, что делать, напиши /гайд</i>"
     )
+    
+    await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
 # --- ПРЕМИУМ (ИНФОРМАЦИЯ) ---
 @dp.message(F.text == "/premium")
@@ -728,7 +742,12 @@ async def clear_all(message: types.Message):
 @dp.inline_query()
 async def inline_handler(query: types.InlineQuery):
     text = query.query.lower().strip()
-    couple = await get_user_couple(query.from_user.id)
+    couple = await get_user_couple(query.from_user.id, create_if_missing=False)
+    
+    if not couple:
+        await query.answer([], cache_time=1, switch_pm_text="Сначала напиши боту /start", switch_pm_parameter="start")
+        return
+
     data = couple.data_json
     results = []
     bot_username = (await bot.get_me()).username
