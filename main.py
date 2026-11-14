@@ -258,6 +258,7 @@ HTML_PAGE = """
         let tg = window.Telegram.WebApp; tg.expand();
         let currentData = {};
         let alertShown = false;
+        // Пытаемся взять ID из Telegram. Если не получилось — ставим 0 (сервер сам разберется)
         let userId = tg.initDataUnsafe?.user?.id || 0;
         let isPremium = false;
 
@@ -281,6 +282,10 @@ HTML_PAGE = """
         }
 
         async function loadData() {
+            // СРАЗУ рисуем палитру
+            renderPalette('bgPalette', 'bgColor', true);
+            renderPalette('btnPalette', 'btnColor', true);
+            
             try {
                 let res = await fetch(`/api/data?user_id=${userId}`); 
                 if (!res.ok) throw new Error("Ошибка сервера");
@@ -298,7 +303,7 @@ HTML_PAGE = """
                 document.getElementById('buyPremiumBtn').style.display = isPremium ? 'none' : 'block';
             } catch (e) {
                 console.error(e);
-                document.getElementById('days').innerText = "❌ Ошибка загрузки. Обновите страницу.";
+                document.getElementById('days').innerText = "❌ Ошибка сети. Попробуйте позже.";
             }
         }
 
@@ -379,7 +384,7 @@ HTML_PAGE = """
 </html>
 """
 
-# --- СТРАНИЦА ДЛЯ ИГРЫ SPICER (ИСПРАВЛЕНИЕ 404) ---
+# --- СТРАНИЦА ДЛЯ ИГРЫ SPICER ---
 SPICER_PAGE = """
 <!DOCTYPE html>
 <html>
