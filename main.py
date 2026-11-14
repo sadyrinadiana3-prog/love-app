@@ -372,27 +372,17 @@ async def start(message: types.Message):
         parse_mode="HTML"
     )
 
-# --- ПРЕМИУМ И ОПЛАТА (ИСПРАВЛЕНО) ---
+# --- ПРЕМИУМ И ОПЛАТА (С ДВУМЯ КНОПКАМИ) ---
 @dp.message(F.text == "/premium")
 async def premium_cmd(message: types.Message):
-    couple = await get_user_couple(message.from_user.id)
-    
-    # Если премиум уже есть, показываем кнопку "Как пользоваться"
-    if couple.is_premium:
-        text = "✅ <b>У вас уже есть Премиум!</b>\n\nНажмите кнопку ниже, чтобы узнать, как пользоваться всеми премиум-функциями."
-        builder = InlineKeyboardBuilder()
-        builder.row(InlineKeyboardButton(text="ℹ️ Как пользоваться Премиумом", callback_data="premium_details"))
-        await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-        return
-    
-    # Если премиума нет, показываем кнопку "Подробнее" и "Оплатить"
+    # Всегда показываем две кнопки, как просила
     text = (
         "💎 <b>Премиум-подписка Love App</b>\n\n"
-        "Нажмите на кнопку ниже, чтобы узнать все подробности и оплатить."
+        "Нажмите на кнопку ниже, чтобы узнать все подробности или оплатить."
     )
     
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="ℹ️ Подробнее о Премиуме", callback_data="premium_details"))
+    builder.row(InlineKeyboardButton(text="ℹ️ Подробнее о функциях", callback_data="premium_details"))
     builder.row(InlineKeyboardButton(text="⭐ Оплатить 50 Stars", pay=True))
     
     prices = [LabeledPrice(label="XTR", amount=50)]
@@ -406,7 +396,6 @@ async def premium_cmd(message: types.Message):
         reply_markup=builder.as_markup()
     )
 
-# Обработчик кнопки "Подробнее" / "Как пользоваться"
 @dp.callback_query(F.data == "premium_details")
 async def premium_details(callback: types.CallbackQuery):
     text = (
