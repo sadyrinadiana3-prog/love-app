@@ -56,6 +56,12 @@ def load_fonts():
         FONTS['small'] = ImageFont.load_default()
 
 load_fonts()
+SPICER_QUESTIONS = [
+    "Хочешь ли ты устроить романтический ужин?",
+    "Хочешь ли ты поехать в спонтанное путешествие?",
+    "Хочешь ли ты попробовать что-то новое в постели?",
+    "Хочешь ли ты устроить сюрприз для партнера?",
+]
 
 # --- РАБОТА С БАЗОЙ ---
 async def get_user_couple(user_id: int, create_if_missing=True):
@@ -101,6 +107,7 @@ async def update_couple_data(couple_id: int, data: dict):
             await session.commit()
 
 # --- ОПТИМИЗАЦИЯ: Используем глобальные шрифты ---
+# --- ГЕНЕРАЦИЯ КАРТИНКИ ---
 def generate_report_image(data: dict) -> bytes:
     width, height = 800, 1000
     img = Image.new('RGB', (width, height), color='#17212b')
@@ -108,12 +115,24 @@ def generate_report_image(data: dict) -> bytes:
     
     title = data.get("title", "💖 Наша пара 💖")
     draw.text((width//2, 50), title, fill="#ffffff", font=FONTS['title'], anchor="ma")
+    try:
+        font_title = ImageFont.truetype("/system/fonts/Roboto-Bold.ttf", 50)
+        font_text = ImageFont.truetype("/system/fonts/Roboto-Regular.ttf", 30)
+        font_small = ImageFont.truetype("/system/fonts/Roboto-Regular.ttf", 24)
+    except:
+        font_title = ImageFont.load_default()
+        font_text = ImageFont.load_default()
+        font_small = ImageFont.load_default()
+
+    title = data.get("title", "💖 Наша пара 💖")
+    draw.text((width//2, 50), title, fill="#ffffff", font=font_title, anchor="ma")
     
     y_offset = 150
     if data.get("meet_date"):
         meet = datetime.datetime.strptime(data["meet_date"], "%Y-%m-%d").date()
         days = (meet - datetime.date.today()).days
         draw.text((50, y_offset), f"✈️ До встречи: {days} дн.", fill="#64b5f6", font=FONTS['text'])
+        draw.text((50, y_offset), f"✈️ До встречи: {days} дн.", fill="#64b5f6", font=font_text)
         y_offset += 50
     if data.get("rel_date"):
         rel = datetime.datetime.strptime(data["rel_date"], "%Y-%m-%d").date()
@@ -122,6 +141,10 @@ def generate_report_image(data: dict) -> bytes:
         y_offset += 80
 
     draw.text((50, y_offset), "📋 Планы:", fill="#ff9800", font=FONTS['text'])
+        draw.text((50, y_offset), f"❤️ Вместе уже: {days} дн.", fill="#64b5f6", font=font_text)
+        y_offset += 80
+
+    draw.text((50, y_offset), "📋 Планы:", fill="#ff9800", font=font_text)
     y_offset += 40
     for i, p in enumerate(data.get("plans", []), 1):
         if y_offset > height - 100: break
@@ -131,11 +154,17 @@ def generate_report_image(data: dict) -> bytes:
     
     y_offset += 20
     draw.text((50, y_offset), "🎒 Вещи:", fill="#ff9800", font=FONTS['text'])
+        draw.text((70, y_offset), f"{mark} {i}. {p.get('text')}", fill="#ffffff", font=font_small)
+        y_offset += 35
+    
+    y_offset += 20
+    draw.text((50, y_offset), "🎒 Вещи:", fill="#ff9800", font=font_text)
     y_offset += 40
     for i, p in enumerate(data.get("packing", []), 1):
         if y_offset > height - 50: break
         mark = "✅" if p.get("done") else "🔸"
         draw.text((70, y_offset), f"{mark} {i}. {p.get('text')}", fill="#ffffff", font=FONTS['small'])
+        draw.text((70, y_offset), f"{mark} {i}. {p.get('text')}", fill="#ffffff", font=font_small)
         y_offset += 35
 
     buf = io.BytesIO()
@@ -214,6 +243,13 @@ HTML_PAGE = """
         <h3>🎮 Игра Spicer</h3>
         <p>Откройте игру в отдельном окне!</p>
         <button onclick="openSpicer()" style="background:#9c27b0;">🎮 Играть в Spicer</button>
+        <p>Ответьте на вопросы, и если ответы совпадут, вы увидите это!</p>
+        <div id="spicerGame">
+            <div id="spicerQuestion" style="margin: 10px 0; font-weight: bold;"></div>
+            <button onclick="answerSpicer(true)" class="spicer-btn">✅ Да</button>
+            <button onclick="answerSpicer(false)" class="spicer-btn">❌ Нет</button>
+            <div id="spicerResult" style="margin-top: 10px;"></div>
+        </div>
     </div>
 
     <div class="card bottom-settings">
@@ -254,6 +290,13 @@ HTML_PAGE = """
         let alertShown = false;
         let userId = tg.initDataUnsafe?.user?.id || 0;
         let isPremium = false;
+        let spicerQuestions = [
+            "Хочешь ли ты устроить романтический ужин?",
+            "Хочешь ли ты поехать в спонтанное путешествие?",
+            "Хочешь ли ты попробовать что-то новое в постели?",
+            "Хочешь ли ты устроить сюрприз для партнера?"
+        ];
+        let currentSpicerIndex = 0;
 
         function openSpicer() {
             // Открываем игру по ссылке (это отдельная страница)
@@ -293,6 +336,26 @@ HTML_PAGE = """
             
             document.getElementById('premiumStatus').innerText = isPremium ? "✅ Премиум активен! Вам доступны эксклюзивные цвета." : "❌ Премиум не активен.";
             document.getElementById('buyPremiumBtn').style.display = isPremium ? 'none' : 'block';
+            
+            loadSpicer();
+        }
+
+        function loadSpicer() {
+            if (!currentData.spicer_answers) currentData.spicer_answers = {};
+            if (currentSpicerIndex >= spicerQuestions.length) {
+                document.getElementById('spicerQuestion').innerText = "Вы ответили на все вопросы!";
+                document.getElementById('spicerResult').innerText = "Посмотрите, совпали ли ваши ответы.";
+                return;
+            }
+            document.getElementById('spicerQuestion').innerText = spicerQuestions[currentSpicerIndex];
+        }
+
+        async function answerSpicer(answer) {
+            if (!currentData.spicer_answers) currentData.spicer_answers = {};
+            currentData.spicer_answers[currentSpicerIndex] = answer;
+            await saveData();
+            currentSpicerIndex++;
+            loadSpicer();
         }
 
         function updateUI() {
@@ -1049,4 +1112,3 @@ async def run_bot():
 async def startup_event():
     await init_db()
     asyncio.create_task(run_bot())
-    asyncio.create_task(check_background_tasks())
