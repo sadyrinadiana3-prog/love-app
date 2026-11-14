@@ -4,7 +4,7 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, CommandObject
 from aiogram.types import (InlineKeyboardButton, WebAppInfo, InlineQueryResultArticle, 
                            InlineQueryResultPhoto, InputTextMessageContent, InlineQueryResultsButton,
-                           LabeledPrice, PreCheckoutQuery, BufferedInputFile)
+                           LabeledPrice, PreCheckoutQuery)
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import datetime
 import random
@@ -12,9 +12,8 @@ import asyncio
 import uuid
 import os
 import logging
-import io
-from PIL import Image, ImageDraw, ImageFont
 
+# Библиотека для ЮKassa (СБП)
 try:
     from yookassa import Configuration, Payment
     YOOKASSA_AVAILABLE = True
@@ -31,7 +30,6 @@ app = FastAPI()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 SERVER_URL = "https://love-app-rb47.onrender.com"
-MUSIC_URL = "https://example.com/love.mp3"
 
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID", "ВСТАВЬТЕ_СВОЙ_SHOP_ID")
 YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY", "ВСТАВЬТЕ_СВОЙ_SECRET_KEY")
@@ -47,32 +45,7 @@ LOVE_QUOTES = [
     "«Для честной любви даже самое маленькое расстояние — слишком большое, но даже самое большое расстояние — преодолимо.»",
 ]
 
-DAILY_QUESTIONS = [
-    "Что ты ценишь в партнере больше всего?",
-    "Какой ваш самый счастливый момент вместе?",
-    "Что бы ты хотел сделать вместе в следующем году?",
-    "За что ты благодарен партнеру сегодня?",
-]
-
-FONTS = {}
-def load_fonts():
-    global FONTS
-    try:
-        FONTS['title'] = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 50)
-        FONTS['text'] = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 30)
-        FONTS['small'] = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24)
-    except:
-        try:
-            FONTS['title'] = ImageFont.truetype("arial.ttf", 50)
-            FONTS['text'] = ImageFont.truetype("arial.ttf", 30)
-            FONTS['small'] = ImageFont.truetype("arial.ttf", 24)
-        except:
-            FONTS['title'] = ImageFont.load_default()
-            FONTS['text'] = ImageFont.load_default()
-            FONTS['small'] = ImageFont.load_default()
-
-load_fonts()
-
+# --- РАБОТА С БАЗОЙ ---
 async def get_user_couple(user_id: int, create_if_missing=True):
     async with async_session() as session:
         try:
@@ -86,12 +59,7 @@ async def get_user_couple(user_id: int, create_if_missing=True):
                     "custom_photo": "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg", 
                     "title": "💖 Наша пара 💖",
                     "bg_color": "#17212b", "btn_color": "#2481cc", 
-                    "rel_date": None, "font_size": "22px", "font_style": "italic",
-                    "capsules": [],
-                    "daily_question": None,
-                    "partner_answer": None,
-                    "spicer_answers": {},
-                    "last_analytics_date": None
+                    "rel_date": None, "font_size": "22px", "font_style": "italic"
                 })
                 session.add(couple)
                 await session.commit()
@@ -115,48 +83,7 @@ async def update_couple_data(couple_id: int, data: dict):
             couple.data_json = data
             await session.commit()
 
-def generate_report_image(data: dict) -> bytes:
-    width, height = 800, 1000
-    img = Image.new('RGB', (width, height), color='#17212b')
-    draw = ImageDraw.Draw(img)
-    
-    title = data.get("title", "Наша пара")
-    draw.text((width//2, 50), title, fill="#ffffff", font=FONTS['title'], anchor="ma")
-    
-    y_offset = 150
-    if data.get("meet_date"):
-        meet = datetime.datetime.strptime(data["meet_date"], "%Y-%m-%d").date()
-        days = (meet - datetime.date.today()).days
-        draw.text((50, y_offset), f"До встречи: {days} дн.", fill="#64b5f6", font=FONTS['text'])
-        y_offset += 50
-    if data.get("rel_date"):
-        rel = datetime.datetime.strptime(data["rel_date"], "%Y-%m-%d").date()
-        days = (datetime.date.today() - rel).days
-        draw.text((50, y_offset), f"Вместе уже: {days} дн.", fill="#64b5f6", font=FONTS['text'])
-        y_offset += 80
-
-    draw.text((50, y_offset), "Планы:", fill="#ff9800", font=FONTS['text'])
-    y_offset += 40
-    for i, p in enumerate(data.get("plans", []), 1):
-        if y_offset > height - 100: break
-        mark = "[x]" if p.get("done") else "[ ]"
-        draw.text((70, y_offset), f"{mark} {i}. {p.get('text')}", fill="#ffffff", font=FONTS['small'])
-        y_offset += 35
-    
-    y_offset += 20
-    draw.text((50, y_offset), "Вещи:", fill="#ff9800", font=FONTS['text'])
-    y_offset += 40
-    for i, p in enumerate(data.get("packing", []), 1):
-        if y_offset > height - 50: break
-        mark = "[x]" if p.get("done") else "[ ]"
-        draw.text((70, y_offset), f"{mark} {i}. {p.get('text')}", fill="#ffffff", font=FONTS['small'])
-        y_offset += 35
-
-    buf = io.BytesIO()
-    img.save(buf, format='PNG')
-    buf.seek(0)
-    return buf.getvalue()
-
+# --- САЙТ (ОКНО) ---
 HTML_PAGE = """ 
 <!DOCTYPE html>
 <html>
@@ -165,151 +92,222 @@ HTML_PAGE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { font-family: Arial; background: #17212b; color: #fff; padding: 15px; text-align: center; }
-        .card { background: #232e3c; border-radius: 15px; padding: 15px; margin-bottom: 15px; }
-        .palette { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; margin: 10px 0; }
+        :root { --bg: #17212b; --card-bg: #232e3c; --btn: #2481cc; --text: #fff; --font-size: 22px; --font-style: italic; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); padding: 15px; text-align: center; transition: 0.3s; }
+        .card { background: var(--card-bg); border-radius: 15px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        img { width: 100%; border-radius: 10px; margin-bottom: 10px; max-height: 300px; object-fit: cover; }
+        input, button { width: 100%; padding: 12px; margin: 5px 0; border-radius: 8px; border: none; font-size: 16px; box-sizing: border-box; }
+        button { background: var(--btn); color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:active { opacity: 0.8; transform: scale(0.98); }
+        .date-big { font-size: var(--font-size); margin: 15px 0; color: #64b5f6; font-weight: bold; font-style: var(--font-style); }
+        .item { text-align: left; padding: 8px; background: rgba(255,255,255,0.1); margin: 5px 0; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .item.done { opacity: 0.5; text-decoration: line-through; }
+        .del-btn { background: #e53935; width: auto; padding: 5px 10px; margin: 0 0 0 5px; font-size: 14px; }
+        .done-btn { background: #43a047; width: auto; padding: 5px 10px; margin: 0; font-size: 14px; }
+        h2 { font-style: italic; text-shadow: 0 0 10px rgba(255,255,255,0.2); }
+        .stat-box { font-size: 18px; margin: 10px 0; }
+        .bottom-settings { border-top: 2px solid var(--btn); padding-top: 15px; margin-top: 20px; }
+        .palette { display: flex; gap: 5px; flex-wrap: wrap; margin: 10px 0; justify-content: center; }
         .color-dot { width: 30px; height: 30px; border-radius: 50%; border: 2px solid white; cursor: pointer; }
+        .color-dot:active { transform: scale(0.9); }
+        .danger-btn { background: #e53935; margin-top: 20px; }
+        .premium-btn { background: linear-gradient(45deg, #ff9800, #e91e63); margin-top: 20px; }
+        .premium-section { border: 2px dashed #ff9800; padding: 10px; border-radius: 10px; margin-top: 20px; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2 id="appTitle">Загрузка...</h2>
-        <div id="days">✈️ Загрузка...</div>
-        <div id="relStats"></div>
+        <img id="mainPhoto" src="#">
+        <h2 id="appTitle"></h2>
+        <div id="days" class="date-big">✈️ Загрузка...</div>
+        <div id="relStats" class="stat-box"></div>
+        <button onclick="showAlert()" style="background:#ff9800; margin-top:10px;">🔔 Показать уведомление</button>
     </div>
     <div class="card">
-        <h3>Цвет фона:</h3>
+        <h3>📅 Даты</h3>
+        <input type="date" id="dateInput">
+        <button onclick="setDate()">Дата встречи</button>
+        <input type="date" id="relDateInput">
+        <button onclick="setRelDate()">Дата отношений</button>
+    </div>
+    <div class="card">
+        <h3>📋 Планы</h3>
+        <div id="plansList"></div>
+        <input type="text" id="planInput" placeholder="Новый план...">
+        <button onclick="addPlan()">Добавить план</button>
+    </div>
+    <div class="card">
+        <h3>🎒 Вещи в поездку</h3>
+        <div id="packingList"></div>
+        <input type="text" id="packingInput" placeholder="Что взять...">
+        <button onclick="addPacking()">Добавить вещь</button>
+    </div>
+    <div class="card">
+        <h3>📝 Заметки</h3>
+        <div id="notesList"></div>
+        <input type="text" id="noteInput" placeholder="Новая заметка...">
+        <button onclick="addNote()">Добавить заметку</button>
+    </div>
+    <div class="card bottom-settings">
+        <h3>🎨 Стиль и Настройки</h3>
+        <p><b>Название окна:</b></p>
+        <input type="text" id="titleInput" placeholder="Например: Дина и Аниша">
+        <button onclick="updateTitle()" style="background:#ff9800;">Изменить название</button>
+        
+        <p><b>Цвет фона:</b></p>
         <div class="palette" id="bgPalette"></div>
-        <h3>Цвет кнопок:</h3>
+        <input type="text" id="bgColor" placeholder="Или введи вручную">
+        
+        <p><b>Цвет кнопок:</b></p>
         <div class="palette" id="btnPalette"></div>
+        <input type="text" id="btnColor" placeholder="Или введи вручную">
+        
+        <p><b>Текст:</b></p>
+        <input type="text" id="fontSize" placeholder="Размер (например, 22px)">
+        <select id="fontStyle" style="width:100%; padding:12px; margin:5px 0; border-radius:8px; border:none; font-size:16px;">
+            <option value="normal">Обычный</option>
+            <option value="italic">Курсив</option>
+            <option value="bold">Жирный</option>
+        </select>
+        <p><b>Фото:</b></p>
+        <input type="text" id="photoInput" placeholder="Ссылка на новую картинку...">
+        <button onclick="applyAllSettings()" style="background:#4caf50;">Применить всё</button>
+        <button onclick="unlinkPartner()" class="danger-btn">🗑 Отвязать партнёра</button>
+        
+        <div class="premium-section">
+            <h3>💎 Премиум</h3>
+            <p id="premiumStatus">Проверка статуса...</p>
+            <button onclick="buyPremium()" class="premium-btn" id="buyPremiumBtn" style="display:none;">Купить Премиум</button>
+        </div>
     </div>
     <script>
-        let tg = window.Telegram.WebApp;
-        tg.expand();
+        let tg = window.Telegram.WebApp; tg.expand();
+        let currentData = {};
+        let alertShown = false;
         let userId = tg.initDataUnsafe?.user?.id || 0;
         let isPremium = false;
 
         const colors = ['#17212b', '#000000', '#1e3a5f', '#2e4a62', '#4a2e62', '#623a4a', '#2e6244', '#ffffff', '#e91e63', '#ff9800', '#4caf50', '#2481cc'];
         const premiumColors = ['#ff6b6b', '#feca57', '#48dbfb', '#ff9ff3', '#54a0ff'];
 
-        function renderPalette(containerId, includePremium = false) {
+        function renderPalette(containerId, inputId, includePremium = false) {
             const container = document.getElementById(containerId);
             let allColors = colors;
-            if (includePremium && isPremium) { allColors = colors.concat(premiumColors); }
+            if (includePremium && isPremium) {
+                allColors = colors.concat(premiumColors);
+            }
             container.innerHTML = '';
             allColors.forEach(color => {
                 const dot = document.createElement('div');
                 dot.className = 'color-dot';
                 dot.style.backgroundColor = color;
+                dot.onclick = () => { document.getElementById(inputId).value = color; };
                 container.appendChild(dot);
             });
         }
 
         async function loadData() {
-            renderPalette('bgPalette', true);
-            renderPalette('btnPalette', true);
             renderPalette('bgPalette', 'bgColor', true);
             renderPalette('btnPalette', 'btnColor', true);
-            document.getElementById('days').innerText = "✈️ Загрузка данных...";
 
             try {
-                let res = await fetch(`/api/data?user_id=${userId}`);
+                let res = await fetch(`/api/data?user_id=${userId}`); 
                 if (!res.ok) throw new Error("Ошибка сервера");
-                let data = await res.json();
+                currentData = await res.json(); 
                 
                 let premRes = await fetch(`/api/premium_status?user_id=${userId}`);
                 let premData = await premRes.json();
                 isPremium = premData.is_premium;
-
-                document.getElementById('appTitle').innerText = data.title || "Наша пара";
-                document.getElementById('days').innerText = "Данные загружены!";
-                renderPalette('bgPalette', true);
-                renderPalette('btnPalette', true);
+                
+                updateUI();
+                renderPalette('bgPalette', 'bgColor', true);
+                renderPalette('btnPalette', 'btnColor', true);
+                
+                document.getElementById('premiumStatus').innerText = isPremium ? "✅ Премиум активен!" : "❌ Премиум не активен.";
+                document.getElementById('buyPremiumBtn').style.display = isPremium ? 'none' : 'block';
             } catch (e) {
-                document.getElementById('days').innerText = "❌ Ошибка: " + e.message;
-                console.error(e);
                 document.getElementById('days').innerText = "❌ Ошибка сети. Попробуйте позже.";
             }
         }
 
+        function updateUI() {
+            if (currentData.title) { 
+                document.getElementById('appTitle').innerText = currentData.title; 
+                document.getElementById('titleInput').value = currentData.title;
+            }
+            if (currentData.bg_color) document.documentElement.style.setProperty('--bg', currentData.bg_color);
+            if (currentData.btn_color) document.documentElement.style.setProperty('--btn', currentData.btn_color);
+            if (currentData.font_size) document.documentElement.style.setProperty('--font-size', currentData.font_size);
+            if (currentData.font_style) document.documentElement.style.setProperty('--font-style', currentData.font_style);
+            if (currentData.meet_date) {
+                let meet = new Date(currentData.meet_date); let today = new Date();
+                let diff = Math.ceil((meet - today) / (1000 * 60 * 60 * 24));
+                document.getElementById('days').innerText = `✈️ До встречи: ${diff} дн.`;
+                document.getElementById('dateInput').value = currentData.meet_date;
+            } else { document.getElementById('days').innerText = "✈️ Дата не задана"; }
+            if (currentData.rel_date) {
+                let rel = new Date(currentData.rel_date); let today = new Date();
+                let diff = Math.floor((today - rel) / (1000 * 60 * 60 * 24));
+                document.getElementById('relStats').innerText = `❤️ Вместе уже: ${diff} дн.`;
+                document.getElementById('relDateInput').value = currentData.rel_date;
+            }
+            if (currentData.custom_photo) { document.getElementById('mainPhoto').src = currentData.custom_photo; }
+            let renderList = (id, arr, key) => {
+                let list = document.getElementById(id); list.innerHTML = '';
+                arr.forEach((item, i) => {
+                    let div = document.createElement('div'); 
+                    div.className = 'item' + (item.done ? ' done' : '');
+                    div.innerHTML = `
+                        <span>${item.done ? '✅' : '🔸'} ${item.text}</span>
+                        <div>
+                            <button class="done-btn" onclick="toggleItem('${key}', ${i})">${item.done ? '↩️' : '✔️'}</button>
+                            <button class="del-btn" onclick="delItem('${key}', ${i})">❌</button>
+                        </div>
+                    `;
+                    list.appendChild(div);
+                });
+            };
+            let formatArr = (arr) => arr.map(item => typeof item === 'string' ? {text: item, done: false} : item);
+            renderList('plansList', formatArr(currentData.plans), 'plans');
+            renderList('packingList', formatArr(currentData.packing), 'packing');
+            renderList('notesList', formatArr(currentData.notes), 'notes');
+        }
+
+        async function buyPremium() {
+            tg.showAlert("Для покупки перейдите в чат с ботом и напишите /premium");
+        }
+
+        async def saveData() {
+            await fetch(`/api/data?user_id=${userId}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(currentData) });
+            updateUI();
+        }
+        
+        async function setDate() { let val = document.getElementById('dateInput').value; if (!val) return; currentData.meet_date = val; await saveData(); }
+        async function setRelDate() { let val = document.getElementById('relDateInput').value; if (!val) return; currentData.rel_date = val; await saveData(); }
+        async function updateTitle() { let newTitle = document.getElementById('titleInput').value; if (newTitle.trim()) { currentData.title = newTitle; await saveData(); tg.showAlert("✅ Название изменено!"); } }
+        async function unlinkPartner() { if (confirm("Отвязать партнёра?")) { await fetch(`/api/unlink?user_id=${userId}`, { method: 'POST' }); tg.showAlert("✅ Партнёр отвязан."); loadData(); } }
+        async function applyAllSettings() { 
+            if (document.getElementById('bgColor').value) currentData.bg_color = document.getElementById('bgColor').value;
+            if (document.getElementById('btnColor').value) currentData.btn_color = document.getElementById('btnColor').value;
+            if (document.getElementById('fontSize').value) currentData.font_size = document.getElementById('fontSize').value;
+            currentData.font_style = document.getElementById('fontStyle').value;
+            if (document.getElementById('photoInput').value) currentData.custom_photo = document.getElementById('photoInput').value;
+            await saveData(); 
+        }
+        async function addPlan() { let val = document.getElementById('planInput').value; if (!val) return; currentData.plans.push({text: val, done: false}); document.getElementById('planInput').value = ''; await saveData(); }
+        async function addPacking() { let val = document.getElementById('packingInput').value; if (!val) return; currentData.packing.push({text: val, done: false}); document.getElementById('packingInput').value = ''; await saveData(); }
+        async function addNote() { let val = document.getElementById('noteInput').value; if (!val) return; currentData.notes.push({text: val, done: false}); document.getElementById('noteInput').value = ''; await saveData(); }
+        async function toggleItem(key, index) { currentData[key][index].done = !currentData[key][index].done; await saveData(); }
+        async function delItem(key, index) { currentData[key].splice(index, 1); await saveData(); }
+        function showAlert() { if (currentData.meet_date) { let meet = new Date(currentData.meet_date); let today = new Date(); let diff = Math.ceil((meet - today) / (1000 * 60 * 60 * 24)); tg.showAlert(`💖 До встречи: ${diff} дн.!`); } else { tg.showAlert("Дата не задана"); } }
+        
         loadData();
     </script>
 </body>
 </html>
 """
-# --- СТРАНИЦА ДЛЯ ИГРЫ SPICER (ИСПРАВЛЕНИЕ 404) ---
- SPICER_PAGE = """
 
-# --- СТРАНИЦА ДЛЯ ИГРЫ SPICER ---
-SPICER_PAGE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <style>
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #17212b; color: #fff; padding: 15px; text-align: center; }
-        .card { background: #232e3c; border-radius: 15px; padding: 20px; margin-bottom: 15px; }
-        button { width: 100%; padding: 15px; margin: 10px 0; border-radius: 8px; border: none; font-size: 18px; font-weight: bold; cursor: pointer; }
-        .yes { background: #43a047; color: white; }
-        .no { background: #e53935; color: white; }
-    </style>
-</head>
-<body>
-    <h2>🎮 Игра Spicer</h2>
-    <div class="card">
-        <div id="question" style="font-size: 20px; margin-bottom: 20px;"></div>
-        <button class="yes" onclick="answer(true)">✅ Да</button>
-        <button class="no" onclick="answer(false)">❌ Нет</button>
-        <div id="result" style="margin-top: 20px; font-weight: bold;"></div>
-    </div>
-    <script>
-        let tg = window.Telegram.WebApp; tg.expand();
-        let userId = tg.initDataUnsafe?.user?.id || 0;
-        let questions = [
-            "Хочешь ли ты устроить романтический ужин?",
-            "Хочешь ли ты поехать в спонтанное путешествие?",
-            "Хочешь ли ты попробовать что-то новое в постели?",
-            "Хочешь ли ты устроить сюрприз для партнера?"
-        ];
-        let currentIndex = 0;
-        let answers = {};
-
-        async function loadGame() {
-            let res = await fetch(`/api/game_data?user_id=${userId}`);
-            let data = await res.json();
-            answers = data.answers || {};
-            if (answers[currentIndex] !== undefined) currentIndex++;
-            updateUI();
-        }
-
-        function updateUI() {
-            if (currentIndex >= questions.length) {
-                document.getElementById('question').innerText = "Вы ответили на все вопросы!";
-                document.getElementById('result').innerText = "Посмотрите, совпали ли ваши ответы в основном окне.";
-                return;
-            }
-            document.getElementById('question').innerText = questions[currentIndex];
-        }
-
-        async function answer(val) {
-            answers[currentIndex] = val;
-            await fetch('/api/save_game_data', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({user_id: userId, answers: answers})
-            });
-            currentIndex++;
-            updateUI();
-        }
-
-        loadGame();
-    </script>
-</body>
-</html>
-"""
-
+# --- API ---
 @app.get("/api/premium_status")
 async def premium_status(user_id: int):
     couple = await get_user_couple(user_id)
@@ -318,10 +316,6 @@ async def premium_status(user_id: int):
 @app.get("/", response_class=HTMLResponse)
 async def index():
     return HTML_PAGE
-
-@app.get("/spicer_game", response_class=HTMLResponse)
-async def spicer_game():
-    return SPICER_PAGE
 
 @app.get("/api/data")
 async def get_data(user_id: int):
@@ -332,21 +326,6 @@ async def get_data(user_id: int):
 async def update_data(data: dict, user_id: int):
     couple = await get_user_couple(user_id)
     await update_couple_data(couple.id, data)
-    return {"status": "ok"}
-
-@app.get("/api/game_data")
-async def game_data(user_id: int):
-    couple = await get_user_couple(user_id)
-    return {"answers": couple.data_json.get("spicer_answers", {})}
-
-@app.post("/api/save_game_data")
-async def save_game_data(data: dict):
-    user_id = data.get("user_id")
-    answers = data.get("answers")
-    couple = await get_user_couple(user_id)
-    json_data = couple.data_json
-    json_data["spicer_answers"] = answers
-    await update_couple_data(couple.id, json_data)
     return {"status": "ok"}
 
 @app.post("/api/unlink")
@@ -363,6 +342,7 @@ async def unlink_partner(user_id: int):
             await session.commit()
     return {"status": "ok"}
 
+# --- БОТ ---
 @dp.message(CommandStart(deep_link=True))
 async def start_with_code(message: types.Message, command: CommandObject):
     user_id = message.from_user.id
@@ -393,26 +373,15 @@ async def start(message: types.Message):
     premium_status = "✅ У вас есть Премиум!" if couple.is_premium else "💎 У вас нет Премиума."
     
     text = (
-        f"Привет! Твой код приглашения для партнера:\n"
-        f"<code>{couple.invite_code}</code>\n\n"
+        f"Привет! Твой код приглашения для партнера:\n<code>{couple.invite_code}</code>\n\n"
         f"Скинь его партнеру или отправь ссылку:\n"
         f"https://t.me/{(await bot.get_me()).username}?start={couple.invite_code}\n\n"
         f"<b>💎 Премиум:</b>\n"
-        f"• /premium — узнать все подробности о функциях\n"
-        f"• /buy_premium — купить Премиум за 50 Stars\n"
-        f"• /buy_sbp — купить Премиум (СБП/карта)\n"
+        f"• /premium — подробности и функции\n"
+        f"• /buy_premium — купить за Stars\n"
+        f"• /buy_sbp — купить по СБП\n"
         f"• Статус: {premium_status}\n\n"
-        f"<b>🛠 Основные команды:</b>\n"
-        f"📅 /дата 2026-12-31\n"
-        f"❤️ /отношения 2024-01-01\n"
-        f"📊 /дни\n"
-        f"📋 /план Текст\n"
-        f"🎒 /вещь Текст\n"
-        f"📝 /заметка Текст\n"
-        f"📋 /отчет\n"
-        f"🎮 /spicer — игра для пар (Премиум)\n"
-        f"👫 /мой_код — получить код\n\n"
-        f"<i>Если не знаешь, что делать, напиши /гайд</i>"
+        f"<i>Подробнее — /гайд</i>"
     )
     
     await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
@@ -432,17 +401,13 @@ async def premium_cmd(message: types.Message):
 @dp.callback_query(F.data == "premium_details")
 async def premium_details(callback: types.CallbackQuery):
     text = (
-        "💎 <b>Что дает Премиум в Love App и как этим пользоваться?</b>\n\n"
+        "💎 <b>Что дает Премиум в Love App?</b>\n\n"
         "🎨 <b>1. Эксклюзивный дизайн:</b>\n"
         "Зайди в Mini App (Окно). Прокрути вниз до раздела «Цвет фона». Там появятся 5 новых ярких цветов. Нажми на любой и «Применить всё».\n\n"
         "⏳ <b>2. Капсула времени:</b>\n"
         "Напиши в чат команду <code>/капсула</code>. Бот попросит дату и текст. В нужный день он пришлет это сообщение вам обоим.\n\n"
         "❓ <b>3. Ежедневные вопросы:</b>\n"
         "Напиши команду <code>/вопрос</code>. Бот пришлет вопрос. Ответь на него командой <code>/ответ Твой текст</code>. Как только партнер тоже ответит, вы увидите ответы друг друга.\n\n"
-        "🎮 <b>4. Игра Spicer:</b>\n"
-        "Напиши команду <code>/spicer</code>. Бот пришлет кнопку для открытия игры в отдельном окне.\n\n"
-        "📸 <b>5. Экспорт в картинку:</b>\n"
-        "Напиши команду <code>/отчет</code> и бот пришлет красивую картинку с вашими планами!\n\n"
         "Стоимость: <b>50 Stars</b> (навсегда)."
     )
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=None)
@@ -475,7 +440,7 @@ async def buy_sbp_cmd(message: types.Message):
         await message.answer("❌ Модуль ЮKassa не установлен. Используйте Telegram Stars.")
         return
     if YOOKASSA_SHOP_ID == "ВСТАВЬТЕ_СВОЙ_SHOP_ID" or YOOKASSA_SECRET_KEY == "ВСТАВЬТЕ_СВОЙ_SECRET_KEY":
-        await message.answer("❌ Оплата по СБП не настроена. Пожалуйста, обратитесь к администратору бота.")
+        await message.answer("❌ Оплата по СБП не настроена.")
         return
 
     try:
@@ -499,7 +464,7 @@ async def buy_sbp_cmd(message: types.Message):
         )
     except Exception as e:
         logger.error(f"Ошибка ЮKassa: {e}")
-        await message.answer("❌ Произошла ошибка при создании платежа. Попробуйте позже или используйте Telegram Stars.")
+        await message.answer("❌ Ошибка при создании платежа.")
 
 @app.post("/yookassa/webhook")
 async def yookassa_webhook(request: Request):
@@ -542,7 +507,7 @@ async def success_payment(message: types.Message):
         if c:
             c.is_premium = True
             await session.commit()
-    await message.answer("🎉 <b>Оплата Stars прошла успешно!</b> Премиум активирован навсегда. Откройте окно, чтобы увидеть новые цвета!", parse_mode="HTML")
+    await message.answer("🎉 <b>Оплата Stars прошла успешно!</b> Премиум активирован навсегда.", parse_mode="HTML")
 
 @dp.message(F.text == "/L0v3_Adm1n_Pr3m1um_2026_X9z")
 async def admin_premium(message: types.Message):
@@ -617,23 +582,6 @@ async def answer_question(message: types.Message):
     await update_couple_data(couple.id, data)
     await message.answer("✅ Ваш ответ сохранен! Теперь партнер тоже может ответить.")
 
-@dp.message(F.text == "/spicer")
-async def spicer_cmd(message: types.Message):
-    couple = await get_user_couple(message.from_user.id)
-    if not couple.is_premium:
-        await message.answer("❌ Игра Spicer доступна только с Премиумом. Напиши /premium.")
-        return
-    
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="🎮 Открыть игру Spicer", web_app=WebAppInfo(url=f"{SERVER_URL}/spicer_game")))
-    await message.answer(
-        "🎮 <b>Игра Spicer (Премиум)</b>\n\n"
-        "Нажмите на кнопку ниже, чтобы открыть игру в отдельном окне.\n"
-        "Отвечайте на вопросы, и если ваши ответы совпадут с партнером — вы увидите это!",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML"
-    )
-
 @dp.message(F.text == "/гайд")
 async def guide(message: types.Message):
     text = (
@@ -650,7 +598,7 @@ async def guide(message: types.Message):
         "Напиши /premium, чтобы узнать о премиум-функциях.\n"
         "Напиши /buy_premium, чтобы купить за Stars.\n"
         "Напиши /buy_sbp, чтобы купить по СБП.\n"
-        "После активации доступны: /капсула, /вопрос, /spicer.\n\n"
+        "После активации доступны: /капсула, /вопрос.\n\n"
         "🗑 <b>5. Удаление:</b>\n"
         "❌ /удалить_план 1\n❌ /удалить_вещь 1\n❌ /удалить_заметку 1\n🗑 /очистить"
     )
@@ -666,7 +614,7 @@ async def help_cmd(message: types.Message):
     text = (
         "💖 <b>Все команды:</b>\n\n"
         "📖 /гайд — подробная инструкция\n"
-        "🎵 /музыка\n📸 /фото\n💌 /любовь\n"
+        "📸 /фото\n💌 /любовь\n"
         "📅 /дата 2026-12-31\n❤️ /отношения 2024-01-01\n"
         "📊 /дни\n📋 /план Текст\n🎒 /вещь Текст\n📝 /заметка Текст\n📋 /отчет\n"
         "🏷 /название Имя\n"
@@ -677,8 +625,7 @@ async def help_cmd(message: types.Message):
         "💳 /buy_sbp - купить премиум (СБП)\n"
         "⏳ /капсула - создать капсулу времени (премиум)\n"
         "❓ /вопрос - вопрос дня (премиум)\n"
-        "✍️ /ответ - ответить на вопрос (премиум)\n"
-        "🎮 /spicer - игра для пар (премиум)\n\n"
+        "✍️ /ответ - ответить на вопрос (премиум)\n\n"
         "🗑 <b>Удаление:</b>\n"
         "❌ /удалить_план 1\n❌ /удалить_вещь 1\n❌ /удалить_заметку 1\n"
         "🗓 /удалить_дату\n🗑 /очистить"
@@ -694,10 +641,6 @@ async def set_style(message: types.Message):
         data["bg_color"] = parts[0]; data["btn_color"] = parts[1]; data["font_size"] = parts[2]; data["font_style"] = parts[3]
         await update_couple_data(couple.id, data)
         await message.answer("✅ Стиль обновлен!", parse_mode="HTML")
-
-@dp.message(F.text == "/музыка")
-async def music_cmd(message: types.Message):
-    await message.answer_audio(audio=MUSIC_URL, caption="🎵 Наша песня")
 
 @dp.message(F.text.startswith("/название "))
 async def set_title(message: types.Message):
@@ -778,21 +721,6 @@ async def add_note(message: types.Message):
         await update_couple_data(couple.id, data)
         await message.answer(f"✅ Заметка добавлена: <i>{note}</i>", parse_mode="HTML")
 
-@dp.message(F.text == "/отчет")
-async def report(message: types.Message):
-    couple = await get_user_couple(message.from_user.id)
-    if not couple:
-        return
-    
-    data = couple.data_json
-    image_bytes = generate_report_image(data)
-    
-    await message.answer_photo(
-        photo=BufferedInputFile(image_bytes, filename="report.png"),
-        caption="📸 <b>Ваш отчет!</b>",
-        parse_mode="HTML"
-    )
-
 @dp.message(F.text.startswith("/удалить_план "))
 async def del_plan(message: types.Message):
     try:
@@ -844,68 +772,6 @@ async def clear_all(message: types.Message):
     await update_couple_data(couple.id, data)
     await message.answer("✅ Все данные удалены.")
 
-async def check_background_tasks():
-    while True:
-        try:
-            async with async_session() as session:
-                result = await session.execute(select(Couple))
-                couples = result.scalars().all()
-                today = datetime.date.today().strftime("%Y-%m-%d")
-                current_month = datetime.date.today().strftime("%Y-%m")
-                
-                for couple in couples:
-                    data = couple.data_json
-                    if data:
-                        if "capsules" in data:
-                            capsules = data["capsules"]
-                            for cap in capsules:
-                                if not cap.get("sent") and cap.get("date") == today:
-                                    cap["sent"] = True
-                                    couple.data_json = data
-                                    await session.commit()
-                                    
-                                    for user_id in [couple.user1_id, couple.user2_id]:
-                                        if user_id:
-                                            try:
-                                                await bot.send_message(user_id, f"⏳ <b>Капсула времени открыта!</b>\n\n{cap['text']}", parse_mode="HTML")
-                                            except:
-                                                pass
-                        
-                        if data.get("last_analytics_date") != current_month and datetime.date.today().day == 1:
-                            data["last_analytics_date"] = current_month
-                            couple.data_json = data
-                            await session.commit()
-                            
-                            rel_text = ""
-                            if data.get("rel_date"):
-                                rel = datetime.datetime.strptime(data["rel_date"], "%Y-%m-%d").date()
-                                days = (datetime.date.today() - rel).days
-                                rel_text = f"❤️ Вместе уже: {days} дн.\n"
-                            
-                            total_plans = len(data.get("plans", []))
-                            done_plans = len([p for p in data.get("plans", []) if p.get("done")])
-                            
-                            text = (
-                                f"📊 <b>Ежемесячная аналитика!</b>\n\n"
-                                f"{rel_text}"
-                                f"📋 Выполнено планов: {done_plans} из {total_plans}\n"
-                                f"🎒 Вещей собрано: {len(data.get('packing', []))}\n"
-                                f"📝 Заметок создано: {len(data.get('notes', []))}\n\n"
-                                f"<i>Продолжайте в том же духе!</i>"
-                            )
-                            
-                            for user_id in [couple.user1_id, couple.user2_id]:
-                                if user_id:
-                                    try:
-                                        await bot.send_message(user_id, text, parse_mode="HTML")
-                                    except:
-                                        pass
-                                        
-            await asyncio.sleep(60)
-        except Exception as e:
-            logger.error(f"Ошибка в фоновых задачах: {e}")
-            await asyncio.sleep(60)
-
 async def run_bot():
     logger.info("Запуск polling...")
     try:
@@ -918,4 +784,3 @@ async def run_bot():
 async def startup_event():
     await init_db()
     asyncio.create_task(run_bot())
-    asyncio.create_task(check_background_tasks())
