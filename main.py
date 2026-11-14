@@ -31,9 +31,13 @@ dp = Dispatcher()
 LOVE_QUOTES = [
     "«Расстояние — причина для боли, но не причина для измен.»",
     "«Для честной любви даже самое маленькое расстояние — слишком большое, но даже самое большое расстояние — преодолимо.»",
-    "«Говорят, любовь на расстоянии невозможна. Солнце тоже далеко… но всё же греет.»",
-    "«Даже тот, кто далеко, стоит рядом, если он в твоем сердце.»",
-    "«Расстояние — ничто, когда веришь друг в друга.»",
+]
+
+DAILY_QUESTIONS = [
+    "Что ты ценишь в партнере больше всего?",
+    "Какой ваш самый счастливый момент вместе?",
+    "Что бы ты хотел сделать вместе в следующем году?",
+    "За что ты благодарен партнеру сегодня?",
 ]
 
 # --- РАБОТА С БАЗОЙ ---
@@ -50,7 +54,10 @@ async def get_user_couple(user_id: int, create_if_missing=True):
                     "custom_photo": "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg", 
                     "title": "💖 Наша пара 💖",
                     "bg_color": "#17212b", "btn_color": "#2481cc", 
-                    "rel_date": None, "font_size": "22px", "font_style": "italic"
+                    "rel_date": None, "font_size": "22px", "font_style": "italic",
+                    "capsules": [],
+                    "daily_question": None,
+                    "partner_answer": None
                 })
                 session.add(couple)
                 await session.commit()
@@ -290,7 +297,6 @@ HTML_PAGE = """
 </html>
 """
 
-
 # --- API ДЛЯ ПРЕМИУМА ---
 @app.get("/api/premium_status")
 async def premium_status(user_id: int):
@@ -348,40 +354,77 @@ async def start_with_code(message: types.Message, command: CommandObject):
     builder.row(InlineKeyboardButton(text="💖 Открыть наше окно", web_app=WebAppInfo(url=SERVER_URL)))
     await message.answer("Нажми на кнопку ниже.", reply_markup=builder.as_markup())
 
+# --- ОБНОВЛЕННЫЙ START ---
 @dp.message(CommandStart())
 async def start(message: types.Message):
     couple = await get_user_couple(message.from_user.id)
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="💖 Открыть наше окно", web_app=WebAppInfo(url=SERVER_URL)))
     
-    premium_text = "✅ У вас есть Премиум!" if couple.is_premium else "💎 У вас нет Премиума. Напишите /premium, чтобы узнать больше."
-    
-    # ВОЗВРАЩАЕМ ССЫЛКУ ДЛЯ ПАРТНЕРА
-    await message.answer(
-        f"Привет! Твой код приглашения для партнера:\n<code>{couple.invite_code}</code>\n\n"
-        f"Скинь его партнеру или отправь ссылку:\n"
-        f"https://t.me/{(await bot.get_me()).username}?start={couple.invite_code}\n\n"
-        f"{premium_text}\n\n"
-        f"Если не знаешь, что делать, напиши /гайд", 
-        reply_markup=builder.as_markup(), 
-        parse_mode="HTML"
-    )
-
-# --- ПРЕМИУМ И ОПЛАТА ---
-@dp.message(F.text == "/premium")
-async def premium_cmd(message: types.Message):
-    couple = await get_user_couple(message.from_user.id)
-    if couple.is_premium:
-        await message.answer("✅ У вас уже есть Премиум! Вам доступны эксклюзивные цвета и функции.")
-        return
+    premium_status = "✅ У вас есть Премиум!" if couple.is_premium else "💎 У вас нет Премиума."
     
     text = (
+        f"Привет! Твой код приглашения для партнера:\n"
+        f"<code>{couple.invite_code}</code>\n\n"
+        f"Скинь его партнеру или отправь ссылку:\n"
+        f"https://t.me/{(await bot.get_me()).username}?start={couple.invite_code}\n\n"
+        f"<b>💎 Премиум:</b>\n"
+        f"• /premium — узнать все подробности о функциях\n"
+        f"• /buy_premium — купить Премиум за 50 Stars\n"
+        f"• Статус: {premium_status}\n\n"
+        f"<b>🛠 Основные команды:</b>\n"
+        f"📅 /дата 2026-12-31\n"
+        f"❤️ /отношения 2024-01-01\n"
+        f"📊 /дни\n"
+        f"📋 /план Текст\n"
+        f"🎒 /вещь Текст\n"
+        f"📝 /заметка Текст\n"
+        f"📋 /отчет\n"
+        f"👫 /мой_код — получить код\n\n"
+        f"<i>Если не знаешь, что делать, напиши /гайд</i>"
+    )
+    
+    await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+
+# --- ПРЕМИУМ (ИНФОРМАЦИЯ) ---
+@dp.message(F.text == "/premium")
+async def premium_cmd(message: types.Message):
+    text = (
         "💎 <b>Премиум-подписка Love App</b>\n\n"
-        "Нажмите на кнопку ниже, чтобы узнать все подробности и оплатить."
+        "Нажмите на кнопку ниже, чтобы узнать все подробности и функции."
     )
     
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="ℹ️ Подробнее о Премиуме", callback_data="premium_details"))
+    builder.row(InlineKeyboardButton(text="ℹ️ Подробнее о функциях", callback_data="premium_details"))
+    
+    await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+
+@dp.callback_query(F.data == "premium_details")
+async def premium_details(callback: types.CallbackQuery):
+    text = (
+        "💎 <b>Что дает Премиум в Love App и как этим пользоваться?</b>\n\n"
+        "🎨 <b>1. Эксклюзивный дизайн:</b>\n"
+        "Зайди в Mini App (Окно). Прокрути вниз до раздела «Цвет фона». Там появятся 5 новых ярких цветов. Нажми на любой и «Применить всё».\n\n"
+        "⏳ <b>2. Капсула времени:</b>\n"
+        "Напиши в чат команду <code>/капсула</code>. Бот попросит дату и текст. В нужный день он пришлет это сообщение вам обоим.\n\n"
+        "❓ <b>3. Ежедневные вопросы:</b>\n"
+        "Напиши команду <code>/вопрос</code>. Бот пришлет вопрос. Ответь на него командой <code>/ответ Твой текст</code>. Как только партнер тоже ответит, вы увидите ответы друг друга.\n\n"
+        "📊 <b>4. Аналитика и Экспорт:</b>\n"
+        "Эти функции находятся в разработке и скоро появятся в Mini App.\n\n"
+        "Стоимость: <b>50 Stars</b> (навсегда)."
+    )
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=None)
+    await callback.answer()
+
+# --- ОТДЕЛЬНАЯ КОМАНДА ДЛЯ ПОКУПКИ ---
+@dp.message(F.text == "/buy_premium")
+async def buy_premium_cmd(message: types.Message):
+    text = (
+        "💎 <b>Покупка Премиум-подписки</b>\n\n"
+        "Нажмите на кнопку ниже, чтобы оплатить подписку через Telegram Stars."
+    )
+    
+    builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="⭐ Оплатить 50 Stars", pay=True))
     
     prices = [LabeledPrice(label="XTR", amount=50)]
@@ -394,20 +437,6 @@ async def premium_cmd(message: types.Message):
         currency="XTR",
         reply_markup=builder.as_markup()
     )
-
-@dp.callback_query(F.data == "premium_details")
-async def premium_details(callback: types.CallbackQuery):
-    text = (
-        "💎 <b>Что дает Премиум в Love App?</b>\n\n"
-        "🎨 <b>Эксклюзивный дизайн:</b> Дополнительные 5 премиум-цветов в палитре для фона и кнопок.\n\n"
-        "⏳ <b>Капсула времени:</b> Возможность написать сообщение партнеру, которое откроется в заданную дату.\n\n"
-        "📊 <b>Расширенная аналитика:</b> Красивый отчет раз в месяц о том, сколько дней вы вместе.\n\n"
-        "📸 <b>Экспорт отчета:</b> Возможность сохранить ваш отчет в виде красивой картинки (PNG) и поделиться ею.\n\n"
-        "❓ <b>Ежедневные вопросы:</b> Бот будет присылать вам с партнером интересные вопросы для общения.\n\n"
-        "Стоимость: <b>50 Stars</b> (навсегда)."
-    )
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=None)
-    await callback.answer()
 
 @dp.pre_checkout_query()
 async def pre_checkout(query: PreCheckoutQuery):
@@ -424,10 +453,10 @@ async def success_payment(message: types.Message):
             await session.commit()
     await message.answer("🎉 <b>Оплата прошла успешно!</b> Премиум активирован навсегда. Откройте окно, чтобы увидеть новые цвета!", parse_mode="HTML")
 
-# --- СЕКРЕТНАЯ КОМАНДА ДЛЯ ВЛАДЕЛЬЦА (СЛОЖНЫЙ КОД) ---
+# --- СЕКРЕТНАЯ КОМАНДА ДЛЯ ВЛАДЕЛЬЦА ---
 @dp.message(F.text == "/L0v3_Adm1n_Pr3m1um_2026_X9z")
 async def admin_premium(message: types.Message):
-if message.from_user.id != 1169264429:
+    if message.from_user.id != 1169264429:
         await message.answer("❌ У вас нет доступа к этой команде.")
         return
     
@@ -439,6 +468,65 @@ if message.from_user.id != 1169264429:
             c.is_premium = True
             await session.commit()
     await message.answer("🎉 <b>Админ-доступ:</b> Премиум активирован навсегда для вашего аккаунта!", parse_mode="HTML")
+
+# --- НОВЫЕ ПРЕМИУМ-КОМАНДЫ ---
+@dp.message(F.text == "/капсула")
+async def capsule_cmd(message: types.Message):
+    couple = await get_user_couple(message.from_user.id)
+    if not couple.is_premium:
+        await message.answer("❌ Эта функция доступна только с Премиумом. Напиши /premium.")
+        return
+    await message.answer("⏳ <b>Создание капсулы времени</b>\n\nНапиши дату (в формате ГГГГ-ММ-ДД), когда должно открыться сообщение, и через пробел текст.\n\nПример: <code>/капсула 2026-12-31 С Новым Годом, любимая!</code>", parse_mode="HTML")
+
+@dp.message(F.text.startswith("/капсула "))
+async def create_capsule(message: types.Message):
+    couple = await get_user_couple(message.from_user.id)
+    if not couple.is_premium:
+        return
+    try:
+        parts = message.text.replace("/капсула ", "").split(" ", 1)
+        date_str = parts[0]
+        text_msg = parts[1]
+        datetime.datetime.strptime(date_str, "%Y-%m-%d")
+        
+        data = couple.data_json
+        if "capsules" not in data:
+            data["capsules"] = []
+        data["capsules"].append({"date": date_str, "text": text_msg, "sent": False})
+        await update_couple_data(couple.id, data)
+        await message.answer(f"✅ Капсула создана! Она откроется {date_str}.", parse_mode="HTML")
+    except:
+        await message.answer("❌ Ошибка формата. Пример: <code>/капсула 2026-12-31 Текст</code>", parse_mode="HTML")
+
+@dp.message(F.text == "/вопрос")
+async def daily_question(message: types.Message):
+    couple = await get_user_couple(message.from_user.id)
+    if not couple.is_premium:
+        await message.answer("❌ Эта функция доступна только с Премиумом. Напиши /premium.")
+        return
+    
+    question = random.choice(DAILY_QUESTIONS)
+    data = couple.data_json
+    data["daily_question"] = question
+    data["partner_answer"] = None
+    await update_couple_data(couple.id, data)
+    
+    await message.answer(f"❓ <b>Вопрос дня:</b>\n\n{question}\n\nОтветьте на него командой <code>/ответ Твой текст</code>", parse_mode="HTML")
+
+@dp.message(F.text.startswith("/ответ "))
+async def answer_question(message: types.Message):
+    couple = await get_user_couple(message.from_user.id)
+    if not couple.is_premium:
+        return
+    answer = message.text.replace("/ответ ", "").strip()
+    data = couple.data_json
+    if data.get("partner_answer"):
+        await message.answer("❌ Ваш партнер уже ответил на этот вопрос.")
+        return
+    
+    data["partner_answer"] = answer
+    await update_couple_data(couple.id, data)
+    await message.answer("✅ Ваш ответ сохранен! Теперь партнер тоже может ответить.")
 
 # --- ОСТАЛЬНЫЕ КОМАНДЫ (гайд, план, отчет и т.д.) ---
 @dp.message(F.text == "/гайд")
@@ -454,7 +542,9 @@ async def guide(message: types.Message):
         "🛠 <b>3. Команды:</b>\n"
         "📅 /дата 2026-12-31\n❤️ /отношения 2024-01-01\n📊 /дни\n📋 /план Текст\n🎒 /вещь Текст\n📝 /заметка Текст\n📋 /отчет\n🏷 /название Имя\n🎨 /стиль #17212b #e91e63 24px italic\n\n"
         "💎 <b>4. Премиум:</b>\n"
-        "Напиши /premium, чтобы узнать о премиум-функциях и оплатить Stars.\n\n"
+        "Напиши /premium, чтобы узнать о премиум-функциях.\n"
+        "Напиши /buy_premium, чтобы купить.\n"
+        "После активации доступны: /капсула, /вопрос.\n\n"
         "🗑 <b>5. Удаление:</b>\n"
         "❌ /удалить_план 1\n❌ /удалить_вещь 1\n❌ /удалить_заметку 1\n🗑 /очистить"
     )
@@ -476,7 +566,11 @@ async def help_cmd(message: types.Message):
         "🏷 /название Имя\n"
         "🎨 /стиль [цвет_фона] [цвет_кнопок] [размер_шрифта] [стиль]\n"
         "👫 /мой_код - получить код для приглашения партнера\n"
-        "💎 /premium - узнать о премиуме\n\n"
+        "💎 /premium - узнать о премиуме\n"
+        "🛒 /buy_premium - купить премиум\n"
+        "⏳ /капсула - создать капсулу времени (премиум)\n"
+        "❓ /вопрос - вопрос дня (премиум)\n"
+        "✍️ /ответ - ответить на вопрос (премиум)\n\n"
         "🗑 <b>Удаление:</b>\n"
         "❌ /удалить_план 1\n❌ /удалить_вещь 1\n❌ /удалить_заметку 1\n"
         "🗓 /удалить_дату\n🗑 /очистить"
@@ -648,7 +742,12 @@ async def clear_all(message: types.Message):
 @dp.inline_query()
 async def inline_handler(query: types.InlineQuery):
     text = query.query.lower().strip()
-    couple = await get_user_couple(query.from_user.id)
+    couple = await get_user_couple(query.from_user.id, create_if_missing=False)
+    
+    if not couple:
+        await query.answer([], cache_time=1, switch_pm_text="Сначала напиши боту /start", switch_pm_parameter="start")
+        return
+
     data = couple.data_json
     results = []
     bot_username = (await bot.get_me()).username
@@ -724,19 +823,3 @@ async def run_bot():
 async def startup_event():
     await init_db()
     asyncio.create_task(run_bot())
-# --- СЕКРЕТНАЯ КОМАНДА ДЛЯ ВЛАДЕЛЬЦА ---
-@dp.message(F.text == "/L0v3_Adm1n_Pr3m1um_2026_X9z")
-async def admin_premium(message: types.Message):
-    if message.from_user.id != 1169264429:
-        await message.answer("❌ У вас нет доступа к этой команде.")
-        return
-    
-    couple = await get_user_couple(message.from_user.id)
-    async with async_session() as session:
-        result = await session.execute(select(Couple).where(Couple.id == couple.id))
-        c = result.scalar_one_or_none()
-        if c:
-            c.is_premium = True
-            await session.commit()
-    await message.answer("🎉 <b>Админ-доступ:</b> Премиум активирован навсегда для вашего аккаунта!", parse_mode="HTML")
-
