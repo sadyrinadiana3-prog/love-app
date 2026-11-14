@@ -60,13 +60,7 @@ async def get_user_couple(user_id: int, create_if_missing=True):
             logger.error(f"Ошибка базы данных для user_id {user_id}: {e}")
             await session.rollback()
             new_code = f"LOVE-{uuid.uuid4().hex[:4].upper()}"
-            couple = Couple(user1_id=user_id, invite_code=new_code, data_json={
-                "meet_date": None, "plans": [], "packing": [], "notes": [], 
-                "custom_photo": "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg", 
-                "title": "💖 Наша пара 💖",
-                "bg_color": "#17212b", "btn_color": "#2481cc", 
-                "rel_date": None, "font_size": "22px", "font_style": "italic"
-            })
+            couple = Couple(user1_id=user_id, invite_code=new_code, data_json={})
             session.add(couple)
             await session.commit()
             await session.refresh(couple)
@@ -171,7 +165,6 @@ HTML_PAGE = """
         <button onclick="applyAllSettings()" style="background:#4caf50;">Применить всё</button>
         <button onclick="unlinkPartner()" class="danger-btn">🗑 Отвязать партнёра</button>
         
-        <!-- БЛОК ПРЕМИУМА -->
         <div class="premium-section">
             <h3>💎 Премиум</h3>
             <p id="premiumStatus">Проверка статуса...</p>
@@ -186,7 +179,7 @@ HTML_PAGE = """
         let isPremium = false;
 
         const colors = ['#17212b', '#000000', '#1e3a5f', '#2e4a62', '#4a2e62', '#623a4a', '#2e6244', '#ffffff', '#e91e63', '#ff9800', '#4caf50', '#2481cc'];
-        const premiumColors = ['#ff6b6b', '#feca57', '#48dbfb', '#ff9ff3', '#54a0ff']; // Эксклюзивные цвета
+        const premiumColors = ['#ff6b6b', '#feca57', '#48dbfb', '#ff9ff3', '#54a0ff'];
 
         function renderPalette(containerId, inputId, includePremium = false) {
             const container = document.getElementById(containerId);
@@ -362,7 +355,16 @@ async def start(message: types.Message):
     
     premium_text = "✅ У вас есть Премиум!" if couple.is_premium else "💎 У вас нет Премиума. Напишите /premium, чтобы узнать больше."
     
-    await message.answer(f"Привет! Твой код: <code>{couple.invite_code}</code>\n\n{premium_text}\n\nЕсли не знаешь, что делать, напиши /гайд", reply_markup=builder.as_markup(), parse_mode="HTML")
+    # ВОЗВРАЩАЕМ ССЫЛКУ ДЛЯ ПАРТНЕРА
+    await message.answer(
+        f"Привет! Твой код приглашения для партнера:\n<code>{couple.invite_code}</code>\n\n"
+        f"Скинь его партнеру или отправь ссылку:\n"
+        f"https://t.me/{(await bot.get_me()).username}?start={couple.invite_code}\n\n"
+        f"{premium_text}\n\n"
+        f"Если не знаешь, что делать, напиши /гайд", 
+        reply_markup=builder.as_markup(), 
+        parse_mode="HTML"
+    )
 
 # --- ПРЕМИУМ И ОПЛАТА ---
 @dp.message(F.text == "/premium")
@@ -374,16 +376,11 @@ async def premium_cmd(message: types.Message):
     
     text = (
         "💎 <b>Премиум-подписка Love App</b>\n\n"
-        "Что даёт Премиум:\n"
-        "• 🎨 Эксклюзивные цвета в палитре\n"
-        "• ⏳ Капсулы времени (отложенные сообщения)\n"
-        "• 📊 Расширенная аналитика\n"
-        "• 📸 Экспорт отчета в картинку\n"
-        "• ❓ Ежедневные вопросы для пар\n\n"
-        "Стоимость: <b>50 Stars</b> (навсегда)"
+        "Нажмите на кнопку ниже, чтобы узнать все подробности и оплатить."
     )
     
     builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="ℹ️ Подробнее о Премиуме", callback_data="premium_details"))
     builder.row(InlineKeyboardButton(text="⭐ Оплатить 50 Stars", pay=True))
     
     prices = [LabeledPrice(label="XTR", amount=50)]
@@ -396,6 +393,20 @@ async def premium_cmd(message: types.Message):
         currency="XTR",
         reply_markup=builder.as_markup()
     )
+
+@dp.callback_query(F.data == "premium_details")
+async def premium_details(callback: types.CallbackQuery):
+    text = (
+        "💎 <b>Что дает Премиум в Love App?</b>\n\n"
+        "🎨 <b>Эксклюзивный дизайн:</b> Дополнительные 5 премиум-цветов в палитре для фона и кнопок.\n\n"
+        "⏳ <b>Капсула времени:</b> Возможность написать сообщение партнеру, которое откроется в заданную дату.\n\n"
+        "📊 <b>Расширенная аналитика:</b> Красивый отчет раз в месяц о том, сколько дней вы вместе.\n\n"
+        "📸 <b>Экспорт отчета:</b> Возможность сохранить ваш отчет в виде красивой картинки (PNG) и поделиться ею.\n\n"
+        "❓ <b>Ежедневные вопросы:</b> Бот будет присылать вам с партнером интересные вопросы для общения.\n\n"
+        "Стоимость: <b>50 Stars</b> (навсегда)."
+    )
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=None)
+    await callback.answer()
 
 @dp.pre_checkout_query()
 async def pre_checkout(query: PreCheckoutQuery):
@@ -411,6 +422,22 @@ async def success_payment(message: types.Message):
             c.is_premium = True
             await session.commit()
     await message.answer("🎉 <b>Оплата прошла успешно!</b> Премиум активирован навсегда. Откройте окно, чтобы увидеть новые цвета!", parse_mode="HTML")
+
+# --- СЕКРЕТНАЯ КОМАНДА ДЛЯ ВЛАДЕЛЬЦА (СЛОЖНЫЙ КОД) ---
+@dp.message(F.text == "/L0v3_Adm1n_Pr3m1um_2026_X9z")
+async def admin_premium(message: types.Message):
+    if message.from_user.id != 5564651532:
+        await message.answer("❌ У вас нет доступа к этой команде.")
+        return
+    
+    couple = await get_user_couple(message.from_user.id)
+    async with async_session() as session:
+        result = await session.execute(select(Couple).where(Couple.id == couple.id))
+        c = result.scalar_one_or_none()
+        if c:
+            c.is_premium = True
+            await session.commit()
+    await message.answer("🎉 <b>Админ-доступ:</b> Премиум активирован навсегда для вашего аккаунта!", parse_mode="HTML")
 
 # --- ОСТАЛЬНЫЕ КОМАНДЫ (гайд, план, отчет и т.д.) ---
 @dp.message(F.text == "/гайд")
