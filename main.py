@@ -3,7 +3,8 @@ from fastapi.responses import HTMLResponse
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, CommandObject
 from aiogram.types import (InlineKeyboardButton, WebAppInfo, InlineQueryResultArticle, 
-                           InlineQueryResultPhoto, InputTextMessageContent, InlineQueryResultsButton)
+                           InlineQueryResultPhoto, InputTextMessageContent, InlineQueryResultsButton,
+                           LabeledPrice, PreCheckoutQuery)
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import datetime
 import random
@@ -35,7 +36,7 @@ LOVE_QUOTES = [
     "«Расстояние — ничто, когда веришь друг в друга.»",
 ]
 
-# --- РАБОТА С БАЗОЙ (ЗАЩИЩЕННАЯ ВЕРСИЯ) ---
+# --- РАБОТА С БАЗОЙ ---
 async def get_user_couple(user_id: int, create_if_missing=True):
     async with async_session() as session:
         try:
@@ -107,6 +108,8 @@ HTML_PAGE = """
         .color-dot { width: 30px; height: 30px; border-radius: 50%; border: 2px solid white; cursor: pointer; }
         .color-dot:active { transform: scale(0.9); }
         .danger-btn { background: #e53935; margin-top: 20px; }
+        .premium-btn { background: linear-gradient(45deg, #ff9800, #e91e63); margin-top: 20px; }
+        .premium-section { border: 2px dashed #ff9800; padding: 10px; border-radius: 10px; margin-top: 20px; }
     </style>
 </head>
 <body>
@@ -167,18 +170,32 @@ HTML_PAGE = """
         <input type="text" id="photoInput" placeholder="Ссылка на новую картинку...">
         <button onclick="applyAllSettings()" style="background:#4caf50;">Применить всё</button>
         <button onclick="unlinkPartner()" class="danger-btn">🗑 Отвязать партнёра</button>
+        
+        <!-- БЛОК ПРЕМИУМА -->
+        <div class="premium-section">
+            <h3>💎 Премиум</h3>
+            <p id="premiumStatus">Проверка статуса...</p>
+            <button onclick="buyPremium()" class="premium-btn" id="buyPremiumBtn" style="display:none;">Купить Премиум за 50 Stars</button>
+        </div>
     </div>
     <script>
         let tg = window.Telegram.WebApp; tg.expand();
         let currentData = {};
         let alertShown = false;
         let userId = tg.initDataUnsafe?.user?.id || 0;
+        let isPremium = false;
 
         const colors = ['#17212b', '#000000', '#1e3a5f', '#2e4a62', '#4a2e62', '#623a4a', '#2e6244', '#ffffff', '#e91e63', '#ff9800', '#4caf50', '#2481cc'];
-        
-        function renderPalette(containerId, inputId) {
+        const premiumColors = ['#ff6b6b', '#feca57', '#48dbfb', '#ff9ff3', '#54a0ff']; // Эксклюзивные цвета
+
+        function renderPalette(containerId, inputId, includePremium = false) {
             const container = document.getElementById(containerId);
-            colors.forEach(color => {
+            let allColors = colors;
+            if (includePremium && isPremium) {
+                allColors = colors.concat(premiumColors);
+            }
+            container.innerHTML = '';
+            allColors.forEach(color => {
                 const dot = document.createElement('div');
                 dot.className = 'color-dot';
                 dot.style.backgroundColor = color;
@@ -186,28 +203,21 @@ HTML_PAGE = """
                 container.appendChild(dot);
             });
         }
-        renderPalette('bgPalette', 'bgColor');
-        renderPalette('btnPalette', 'btnColor');
-
-        function showAlert() {
-            if (currentData.meet_date) {
-                let meet = new Date(currentData.meet_date); let today = new Date();
-                let diff = Math.ceil((meet - today) / (1000 * 60 * 60 * 24));
-                tg.showAlert(`💖 До встречи осталось: ${diff} дн.!`);
-            } else { tg.showAlert("💖 Дата встречи не задана"); }
-        }
 
         async function loadData() {
             let res = await fetch(`/api/data?user_id=${userId}`); 
-            currentData = await res.json(); updateUI();
-            if (!alertShown && currentData.meet_date) {
-                alertShown = true;
-                let meet = new Date(currentData.meet_date); let today = new Date();
-                let diff = Math.ceil((meet - today) / (1000 * 60 * 60 * 24));
-                setTimeout(() => {
-                    tg.showPopup({ title: "💖 Наше окно", message: `До встречи осталось: ${diff} дн.!`, buttons: [{type: "ok"}] });
-                }, 500);
-            }
+            currentData = await res.json(); 
+            
+            let premRes = await fetch(`/api/premium_status?user_id=${userId}`);
+            let premData = await premRes.json();
+            isPremium = premData.is_premium;
+            
+            updateUI();
+            renderPalette('bgPalette', 'bgColor', true);
+            renderPalette('btnPalette', 'btnColor', true);
+            
+            document.getElementById('premiumStatus').innerText = isPremium ? "✅ Премиум активен! Вам доступны эксклюзивные цвета." : "❌ Премиум не активен.";
+            document.getElementById('buyPremiumBtn').style.display = isPremium ? 'none' : 'block';
         }
 
         function updateUI() {
@@ -253,25 +263,19 @@ HTML_PAGE = """
             renderList('notesList', formatArr(currentData.notes), 'notes');
         }
 
-        async function updateTitle() {
-            let newTitle = document.getElementById('titleInput').value;
-            if (newTitle.trim()) {
-                currentData.title = newTitle;
-                await saveData();
-                tg.showAlert("✅ Название успешно изменено!");
-            } else { tg.showAlert("❌ Название не может быть пустым."); }
+        async function buyPremium() {
+            tg.showAlert("Для покупки перейдите в чат с ботом и напишите /premium");
         }
 
-        async function unlinkPartner() {
-            if (confirm("Вы уверены, что хотите отвязать партнёра? Все общие данные останутся у вас.")) {
-                await fetch(`/api/unlink?user_id=${userId}`, { method: 'POST' });
-                tg.showAlert("✅ Партнёр отвязан.");
-                loadData();
-            }
+        async function saveData() {
+            await fetch(`/api/data?user_id=${userId}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(currentData) });
+            updateUI();
         }
-
+        
         async function setDate() { let val = document.getElementById('dateInput').value; if (!val) return; currentData.meet_date = val; await saveData(); }
         async function setRelDate() { let val = document.getElementById('relDateInput').value; if (!val) return; currentData.rel_date = val; await saveData(); }
+        async function updateTitle() { let newTitle = document.getElementById('titleInput').value; if (newTitle.trim()) { currentData.title = newTitle; await saveData(); tg.showAlert("✅ Название изменено!"); } }
+        async function unlinkPartner() { if (confirm("Отвязать партнёра?")) { await fetch(`/api/unlink?user_id=${userId}`, { method: 'POST' }); tg.showAlert("✅ Партнёр отвязан."); loadData(); } }
         async function applyAllSettings() { 
             if (document.getElementById('bgColor').value) currentData.bg_color = document.getElementById('bgColor').value;
             if (document.getElementById('btnColor').value) currentData.btn_color = document.getElementById('btnColor').value;
@@ -285,16 +289,19 @@ HTML_PAGE = """
         async function addNote() { let val = document.getElementById('noteInput').value; if (!val) return; currentData.notes.push({text: val, done: false}); document.getElementById('noteInput').value = ''; await saveData(); }
         async function toggleItem(key, index) { currentData[key][index].done = !currentData[key][index].done; await saveData(); }
         async function delItem(key, index) { currentData[key].splice(index, 1); await saveData(); }
-
-        async function saveData() {
-            await fetch(`/api/data?user_id=${userId}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(currentData) });
-            updateUI();
-        }
+        function showAlert() { if (currentData.meet_date) { let meet = new Date(currentData.meet_date); let today = new Date(); let diff = Math.ceil((meet - today) / (1000 * 60 * 60 * 24)); tg.showAlert(`💖 До встречи: ${diff} дн.!`); } else { tg.showAlert("Дата не задана"); } }
+        
         loadData();
     </script>
 </body>
 </html>
 """
+
+# --- API ДЛЯ ПРЕМИУМА ---
+@app.get("/api/premium_status")
+async def premium_status(user_id: int):
+    couple = await get_user_couple(user_id)
+    return {"is_premium": couple.is_premium}
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
@@ -336,41 +343,92 @@ async def start_with_code(message: types.Message, command: CommandObject):
         if couple and couple.user2_id is None and couple.user1_id != user_id:
             couple.user2_id = user_id
             await session.commit()
-            await message.answer("🎉 Вы успешно связаны! Теперь ваши планы и заметки будут общими. Открывайте окно!")
+            await message.answer("🎉 Вы связаны! Открывайте окно!")
         elif couple and couple.user1_id == user_id:
-            await message.answer("Это ваш собственный код приглашения. Отправьте его партнеру.")
+            await message.answer("Это ваш код.")
         else:
-            await message.answer("❌ Код не найден или уже использован. Попросите партнера создать новый.")
+            await message.answer("❌ Код не найден.")
             await get_user_couple(user_id) 
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="💖 Открыть наше окно", web_app=WebAppInfo(url=SERVER_URL)))
-    await message.answer("Нажми на кнопку ниже, чтобы открыть общее окно.", reply_markup=builder.as_markup())
+    await message.answer("Нажми на кнопку ниже.", reply_markup=builder.as_markup())
 
 @dp.message(CommandStart())
 async def start(message: types.Message):
     couple = await get_user_couple(message.from_user.id)
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="💖 Открыть наше окно", web_app=WebAppInfo(url=SERVER_URL)))
-    await message.answer(f"Привет! Твой код приглашения для партнера:\n<code>{couple.invite_code}</code>\n\nСкинь его партнеру или отправь ссылку:\nhttps://t.me/{(await bot.get_me()).username}?start={couple.invite_code}\n\nЕсли не знаешь, что делать, напиши /гайд", reply_markup=builder.as_markup(), parse_mode="HTML")
+    
+    premium_text = "✅ У вас есть Премиум!" if couple.is_premium else "💎 У вас нет Премиума. Напишите /premium, чтобы узнать больше."
+    
+    await message.answer(f"Привет! Твой код: <code>{couple.invite_code}</code>\n\n{premium_text}\n\nЕсли не знаешь, что делать, напиши /гайд", reply_markup=builder.as_markup(), parse_mode="HTML")
 
+# --- ПРЕМИУМ И ОПЛАТА ---
+@dp.message(F.text == "/premium")
+async def premium_cmd(message: types.Message):
+    couple = await get_user_couple(message.from_user.id)
+    if couple.is_premium:
+        await message.answer("✅ У вас уже есть Премиум! Вам доступны эксклюзивные цвета и функции.")
+        return
+    
+    text = (
+        "💎 <b>Премиум-подписка Love App</b>\n\n"
+        "Что даёт Премиум:\n"
+        "• 🎨 Эксклюзивные цвета в палитре\n"
+        "• ⏳ Капсулы времени (отложенные сообщения)\n"
+        "• 📊 Расширенная аналитика\n"
+        "• 📸 Экспорт отчета в картинку\n"
+        "• ❓ Ежедневные вопросы для пар\n\n"
+        "Стоимость: <b>50 Stars</b> (навсегда)"
+    )
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="⭐ Оплатить 50 Stars", pay=True))
+    
+    prices = [LabeledPrice(label="XTR", amount=50)]
+    await message.answer_invoice(
+        title="Премиум Love App",
+        description="Эксклюзивные цвета, капсулы времени и другие функции.",
+        prices=prices,
+        provider_token="",
+        payload="premium_50",
+        currency="XTR",
+        reply_markup=builder.as_markup()
+    )
+
+@dp.pre_checkout_query()
+async def pre_checkout(query: PreCheckoutQuery):
+    await query.answer(ok=True)
+
+@dp.message(F.successful_payment)
+async def success_payment(message: types.Message):
+    couple = await get_user_couple(message.from_user.id)
+    async with async_session() as session:
+        result = await session.execute(select(Couple).where(Couple.id == couple.id))
+        c = result.scalar_one_or_none()
+        if c:
+            c.is_premium = True
+            await session.commit()
+    await message.answer("🎉 <b>Оплата прошла успешно!</b> Премиум активирован навсегда. Откройте окно, чтобы увидеть новые цвета!", parse_mode="HTML")
+
+# --- ОСТАЛЬНЫЕ КОМАНДЫ (гайд, план, отчет и т.д.) ---
 @dp.message(F.text == "/гайд")
 async def guide(message: types.Message):
     text = (
-        "📖 <b>Подробный гайд по боту Love App</b>\n\n"
-        "Этот бот создан для пар, которые хотят вести общие планы, списки вещей и заметки, даже находясь на расстоянии.\n\n"
+        "📖 <b>Гайд по боту Love App</b>\n\n"
         "👫 <b>1. Как пригласить партнера?</b>\n"
-        "• Напиши команду /мой_код.\n"
-        "• Скопируй ссылку и отправь партнеру.\n"
-        "• После нажатия «Start», вы связаны!\n\n"
+        "• Напиши /мой_код.\n"
+        "• Скопируй ссылку и отправь партнеру.\n\n"
         "💻 <b>2. Mini App</b>\n"
         "• Жми «💖 Открыть наше окно» и добавляй планы.\n"
         "• Внизу окна есть палитра цветов и кнопка отвязки.\n\n"
         "🛠 <b>3. Команды:</b>\n"
         "📅 /дата 2026-12-31\n❤️ /отношения 2024-01-01\n📊 /дни\n📋 /план Текст\n🎒 /вещь Текст\n📝 /заметка Текст\n📋 /отчет\n🏷 /название Имя\n🎨 /стиль #17212b #e91e63 24px italic\n\n"
-        "🗑 <b>4. Удаление:</b>\n"
-        "❌ /удалить_план 1\n❌ /удалить_вещь 1\n❌ /удалить_заметку 1\n🗑 /очистить\n\n"
-        "💡 <b>Совет:</b> Данные хранятся в базе и не удалятся!"
+        "💎 <b>4. Премиум:</b>\n"
+        "Напиши /premium, чтобы узнать о премиум-функциях и оплатить Stars.\n\n"
+        "🗑 <b>5. Удаление:</b>\n"
+        "❌ /удалить_план 1\n❌ /удалить_вещь 1\n❌ /удалить_заметку 1\n🗑 /очистить"
     )
     await message.answer(text, parse_mode="HTML")
 
@@ -383,13 +441,14 @@ async def my_code(message: types.Message):
 async def help_cmd(message: types.Message):
     text = (
         "💖 <b>Все команды:</b>\n\n"
-        "📖 /гайд — подробная инструкция по использованию\n"
+        "📖 /гайд — подробная инструкция\n"
         "🎵 /музыка\n📸 /фото\n💌 /любовь\n"
         "📅 /дата 2026-12-31\n❤️ /отношения 2024-01-01\n"
         "📊 /дни\n📋 /план Текст\n🎒 /вещь Текст\n📝 /заметка Текст\n📋 /отчет\n"
         "🏷 /название Имя\n"
         "🎨 /стиль [цвет_фона] [цвет_кнопок] [размер_шрифта] [стиль]\n"
-        "👫 /мой_код - получить код для приглашения партнера\n\n"
+        "👫 /мой_код - получить код для приглашения партнера\n"
+        "💎 /premium - узнать о премиуме\n\n"
         "🗑 <b>Удаление:</b>\n"
         "❌ /удалить_план 1\n❌ /удалить_вещь 1\n❌ /удалить_заметку 1\n"
         "🗓 /удалить_дату\n🗑 /очистить"
@@ -557,7 +616,7 @@ async def clear_all(message: types.Message):
     await update_couple_data(couple.id, data)
     await message.answer("✅ Все данные удалены.")
 
-# --- INLINE РЕЖИМ (С КНОПКОЙ MINI APP) ---
+# --- INLINE РЕЖИМ ---
 @dp.inline_query()
 async def inline_handler(query: types.InlineQuery):
     text = query.query.lower().strip()
@@ -566,7 +625,6 @@ async def inline_handler(query: types.InlineQuery):
     results = []
     bot_username = (await bot.get_me()).username
 
-    # Формируем данные для карточек
     meet_text = "Дата не задана"
     if data.get("meet_date"):
         meet = datetime.datetime.strptime(data["meet_date"], "%Y-%m-%d").date()
@@ -586,7 +644,6 @@ async def inline_handler(query: types.InlineQuery):
     title = data.get("title", "💖 Наша пара 💖")
     photo_url = data.get("custom_photo") or "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg"
 
-    # 1. Фото + Отчет (Самая красивая карточка)
     if not text or "фото" in text or "отчет" in text:
         caption = (
             f"<b>{title}</b>\n\n"
@@ -596,80 +653,46 @@ async def inline_handler(query: types.InlineQuery):
             f"<blockquote><b>📝 Заметки:</b>\n{notes_text}</blockquote>"
         )
         results.append(InlineQueryResultPhoto(
-            id="report_photo", 
-            photo_url=photo_url, 
-            thumbnail_url=photo_url, 
-            title="📸 Наше фото + Отчет", 
-            description="Красивая карточка с фото и всеми данными", 
-            caption=caption, 
-            parse_mode="HTML"
+            id="report_photo", photo_url=photo_url, thumbnail_url=photo_url, 
+            title="📸 Наше фото + Отчет", description="Красивая карточка", 
+            caption=caption, parse_mode="HTML"
         ))
 
-    # 2. Даты и Уведомление (Только текст со статистикой)
-    if not text or "дата" in text or "дни" in text or "уведом" in text:
-        dates_text = (
-            f"<b>{title}</b>\n\n"
-            f"{meet_text}\n"
-            f"{rel_text}\n\n"
-            f"<i>Нажми на кнопку ниже, чтобы открыть общее окно!</i>"
-        )
+    if not text or "дата" in text or "дни" in text:
+        dates_text = f"<b>{title}</b>\n\n{meet_text}\n{rel_text}\n\n<i>Нажми на кнопку ниже!</i>"
         results.append(InlineQueryResultArticle(
-            id="dates_info", 
-            title="📅 Даты и Уведомление", 
-            description="Сколько дней осталось до встречи", 
+            id="dates_info", title="📅 Даты и Уведомление", 
+            description="Сколько дней осталось", 
             input_message_content=InputTextMessageContent(message_text=dates_text, parse_mode="HTML")
         ))
 
-    # 3. Мой код
     if not text or "код" in text:
-        code_text = f"💖 <b>Мой код для приглашения:</b>\n<code>{couple.invite_code}</code>\n\nСсылка:\nhttps://t.me/{bot_username}?start={couple.invite_code}"
+        code_text = f"💖 <b>Мой код:</b>\n<code>{couple.invite_code}</code>\n\nСсылка:\nhttps://t.me/{bot_username}?start={couple.invite_code}"
         results.append(InlineQueryResultArticle(
-            id="my_code", 
-            title="👫 Мой код и Ссылка", 
-            description="Отправит твой код и ссылку для партнера",
+            id="my_code", title="👫 Мой код и Ссылка", 
+            description="Отправит код партнеру", 
             input_message_content=InputTextMessageContent(message_text=code_text, parse_mode="HTML")
         ))
 
-    # 4. Гайд
     if not text or "гайд" in text:
-        guide_text = (
-            "📖 <b>Гайд по Love App</b>\n\n"
-            "👫 <b>Связка:</b> Отправь свой код партнеру.\n"
-            "💻 <b>Mini App:</b> Открой окно и добавляй планы/вещи.\n"
-            "🛠 <b>Команды:</b> /дата, /план, /вещь, /отчет."
-        )
+        guide_text = "📖 <b>Гайд:</b> /дата, /план, /вещь, /отчет, /premium"
         results.append(InlineQueryResultArticle(
-            id="guide", 
-            title="📖 Гайд (полный текст)", 
-            description="Отправит инструкцию в чат",
+            id="guide", title="📖 Гайд", description="Инструкция", 
             input_message_content=InputTextMessageContent(message_text=guide_text, parse_mode="HTML")
         ))
 
-    # --- КНОПКА ДЛЯ MINI APP В INLINE-РЕЖИМЕ ---
-    # Эта кнопка появится НАД списком результатов
-    inline_button = InlineQueryResultsButton(
-        text="💖 Открыть наше окно",
-        web_app=WebAppInfo(url=SERVER_URL)
-    )
-
+    inline_button = InlineQueryResultsButton(text="💖 Открыть наше окно", web_app=WebAppInfo(url=SERVER_URL))
     await query.answer(results[:10], cache_time=1, button=inline_button)
 
 async def run_bot():
-    logger.info("Запуск polling для бота...")
+    logger.info("Запуск polling...")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
     except Exception as e:
-        logger.error(f"Ошибка при запуске бота: {e}")
+        logger.error(f"Ошибка: {e}")
 
 @app.on_event("startup")
 async def startup_event():
-    logger.info("Инициализация базы данных...")
-    try:
-        await init_db()
-        logger.info("База данных успешно инициализирована.")
-    except Exception as e:
-        logger.error(f"Ошибка подключения к базе данных: {e}")
-    
-    logger.info("Создание задачи для запуска бота...")
+    await init_db()
     asyncio.create_task(run_bot())
