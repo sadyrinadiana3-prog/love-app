@@ -427,7 +427,7 @@ async def success_payment(message: types.Message):
 # --- СЕКРЕТНАЯ КОМАНДА ДЛЯ ВЛАДЕЛЬЦА (СЛОЖНЫЙ КОД) ---
 @dp.message(F.text == "/L0v3_Adm1n_Pr3m1um_2026_X9z")
 async def admin_premium(message: types.Message):
-    if message.from_user.id != 5564651532:
+if message.from_user.id != 1169264429:
         await message.answer("❌ У вас нет доступа к этой команде.")
         return
     
