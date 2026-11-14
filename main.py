@@ -165,222 +165,75 @@ HTML_PAGE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root { --bg: #17212b; --card-bg: #232e3c; --btn: #2481cc; --text: #fff; --font-size: 22px; --font-style: italic; }
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); padding: 15px; text-align: center; transition: 0.3s; }
-        .card { background: var(--card-bg); border-radius: 15px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-        img { width: 100%; border-radius: 10px; margin-bottom: 10px; max-height: 300px; object-fit: cover; }
-        input, button { width: 100%; padding: 12px; margin: 5px 0; border-radius: 8px; border: none; font-size: 16px; box-sizing: border-box; }
-        button { background: var(--btn); color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        button:active { opacity: 0.8; transform: scale(0.98); }
-        .date-big { font-size: var(--font-size); margin: 15px 0; color: #64b5f6; font-weight: bold; font-style: var(--font-style); }
-        .item { text-align: left; padding: 8px; background: rgba(255,255,255,0.1); margin: 5px 0; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
-        .item.done { opacity: 0.5; text-decoration: line-through; }
-        .del-btn { background: #e53935; width: auto; padding: 5px 10px; margin: 0 0 0 5px; font-size: 14px; }
-        .done-btn { background: #43a047; width: auto; padding: 5px 10px; margin: 0; font-size: 14px; }
-        h2 { font-style: italic; text-shadow: 0 0 10px rgba(255,255,255,0.2); }
-        .stat-box { font-size: 18px; margin: 10px 0; }
-        .bottom-settings { border-top: 2px solid var(--btn); padding-top: 15px; margin-top: 20px; }
-        .palette { display: flex; gap: 5px; flex-wrap: wrap; margin: 10px 0; justify-content: center; }
+        body { font-family: Arial; background: #17212b; color: #fff; padding: 15px; text-align: center; }
+        .card { background: #232e3c; border-radius: 15px; padding: 15px; margin-bottom: 15px; }
+        .palette { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; margin: 10px 0; }
         .color-dot { width: 30px; height: 30px; border-radius: 50%; border: 2px solid white; cursor: pointer; }
-        .color-dot:active { transform: scale(0.9); }
-        .danger-btn { background: #e53935; margin-top: 20px; }
-        .premium-btn { background: linear-gradient(45deg, #ff9800, #e91e63); margin-top: 20px; }
-        .premium-section { border: 2px dashed #ff9800; padding: 10px; border-radius: 10px; margin-top: 20px; }
     </style>
 </head>
 <body>
     <div class="card">
-        <img id="mainPhoto" src="#">
-        <h2 id="appTitle"></h2>
-        <div id="days" class="date-big">✈️ Загрузка...</div>
-        <div id="relStats" class="stat-box"></div>
-        <button onclick="showAlert()" style="background:#ff9800; margin-top:10px;">🔔 Показать уведомление</button>
+        <h2 id="appTitle">Загрузка...</h2>
+        <div id="days">✈️ Загрузка...</div>
+        <div id="relStats"></div>
     </div>
     <div class="card">
-        <h3>📅 Даты</h3>
-        <input type="date" id="dateInput">
-        <button onclick="setDate()">Дата встречи</button>
-        <input type="date" id="relDateInput">
-        <button onclick="setRelDate()">Дата отношений</button>
-    </div>
-    <div class="card">
-        <h3>📋 Планы</h3>
-        <div id="plansList"></div>
-        <input type="text" id="planInput" placeholder="Новый план...">
-        <button onclick="addPlan()">Добавить план</button>
-    </div>
-    <div class="card">
-        <h3>🎒 Вещи в поездку</h3>
-        <div id="packingList"></div>
-        <input type="text" id="packingInput" placeholder="Что взять...">
-        <button onclick="addPacking()">Добавить вещь</button>
-    </div>
-    <div class="card">
-        <h3>📝 Заметки</h3>
-        <div id="notesList"></div>
-        <input type="text" id="noteInput" placeholder="Новая заметка...">
-        <button onclick="addNote()">Добавить заметку</button>
-    </div>
-
-    <div class="card bottom-settings">
-        <h3>🎨 Стиль и Настройки</h3>
-        <p><b>Название окна:</b></p>
-        <input type="text" id="titleInput" placeholder="Например: Дина и Аниша">
-        <button onclick="updateTitle()" style="background:#ff9800;">Изменить название</button>
-        
-        <p><b>Цвет фона:</b></p>
+        <h3>Цвет фона:</h3>
         <div class="palette" id="bgPalette"></div>
-        <input type="text" id="bgColor" placeholder="Или введи вручную">
-        
-        <p><b>Цвет кнопок:</b></p>
+        <h3>Цвет кнопок:</h3>
         <div class="palette" id="btnPalette"></div>
-        <input type="text" id="btnColor" placeholder="Или введи вручную">
-        
-        <p><b>Текст:</b></p>
-        <input type="text" id="fontSize" placeholder="Размер (например, 22px)">
-        <select id="fontStyle" style="width:100%; padding:12px; margin:5px 0; border-radius:8px; border:none; font-size:16px;">
-            <option value="normal">Обычный</option>
-            <option value="italic">Курсив</option>
-            <option value="bold">Жирный</option>
-        </select>
-        <p><b>Фото:</b></p>
-        <input type="text" id="photoInput" placeholder="Ссылка на новую картинку...">
-        <button onclick="applyAllSettings()" style="background:#4caf50;">Применить всё</button>
-        <button onclick="unlinkPartner()" class="danger-btn">🗑 Отвязать партнёра</button>
-        
-        <div class="premium-section">
-            <h3>💎 Премиум</h3>
-            <p id="premiumStatus">Проверка статуса...</p>
-            <button onclick="buyPremium()" class="premium-btn" id="buyPremiumBtn" style="display:none;">Купить Премиум за 50 Stars</button>
-        </div>
     </div>
     <script>
-        let tg = window.Telegram.WebApp; tg.expand();
-        let currentData = {};
-        let alertShown = false;
+        let tg = window.Telegram.WebApp;
+        tg.expand();
         let userId = tg.initDataUnsafe?.user?.id || 0;
         let isPremium = false;
 
         const colors = ['#17212b', '#000000', '#1e3a5f', '#2e4a62', '#4a2e62', '#623a4a', '#2e6244', '#ffffff', '#e91e63', '#ff9800', '#4caf50', '#2481cc'];
         const premiumColors = ['#ff6b6b', '#feca57', '#48dbfb', '#ff9ff3', '#54a0ff'];
 
-        function renderPalette(containerId, inputId, includePremium = false) {
+        function renderPalette(containerId, includePremium = false) {
             const container = document.getElementById(containerId);
             let allColors = colors;
-            if (includePremium && isPremium) {
-                allColors = colors.concat(premiumColors);
-            }
+            if (includePremium && isPremium) { allColors = colors.concat(premiumColors); }
             container.innerHTML = '';
             allColors.forEach(color => {
                 const dot = document.createElement('div');
                 dot.className = 'color-dot';
                 dot.style.backgroundColor = color;
-                dot.onclick = () => { document.getElementById(inputId).value = color; };
                 container.appendChild(dot);
             });
         }
 
         async function loadData() {
+            renderPalette('bgPalette', true);
+            renderPalette('btnPalette', true);
+
             try {
-                let res = await fetch(`/api/data?user_id=${userId}`); 
+                let res = await fetch(`/api/data?user_id=${userId}`);
                 if (!res.ok) throw new Error("Ошибка сервера");
-                currentData = await res.json(); 
+                let data = await res.json();
                 
                 let premRes = await fetch(`/api/premium_status?user_id=${userId}`);
                 let premData = await premRes.json();
                 isPremium = premData.is_premium;
-                
-                updateUI();
-                renderPalette('bgPalette', 'bgColor', true);
-                renderPalette('btnPalette', 'btnColor', true);
-                
-                document.getElementById('premiumStatus').innerText = isPremium ? "✅ Премиум активен! Вам доступны эксклюзивные цвета." : "❌ Премиум не активен.";
-                document.getElementById('buyPremiumBtn').style.display = isPremium ? 'none' : 'block';
+
+                document.getElementById('appTitle').innerText = data.title || "Наша пара";
+                document.getElementById('days').innerText = "Данные загружены!";
+                renderPalette('bgPalette', true);
+                renderPalette('btnPalette', true);
             } catch (e) {
-                console.error(e);
-                document.getElementById('days').innerText = "❌ Ошибка загрузки. Обновите страницу.";
+                document.getElementById('days').innerText = "❌ Ошибка: " + e.message;
             }
         }
 
-        function updateUI() {
-            if (currentData.title) { 
-                document.getElementById('appTitle').innerText = currentData.title; 
-                document.getElementById('titleInput').value = currentData.title;
-            }
-            if (currentData.bg_color) document.documentElement.style.setProperty('--bg', currentData.bg_color);
-            if (currentData.btn_color) document.documentElement.style.setProperty('--btn', currentData.btn_color);
-            if (currentData.font_size) document.documentElement.style.setProperty('--font-size', currentData.font_size);
-            if (currentData.font_style) document.documentElement.style.setProperty('--font-style', currentData.font_style);
-            if (currentData.meet_date) {
-                let meet = new Date(currentData.meet_date); let today = new Date();
-                let diff = Math.ceil((meet - today) / (1000 * 60 * 60 * 24));
-                document.getElementById('days').innerText = `✈️ До встречи: ${diff} дн.`;
-                document.getElementById('dateInput').value = currentData.meet_date;
-            } else { document.getElementById('days').innerText = "✈️ Дата не задана"; }
-            if (currentData.rel_date) {
-                let rel = new Date(currentData.rel_date); let today = new Date();
-                let diff = Math.floor((today - rel) / (1000 * 60 * 60 * 24));
-                document.getElementById('relStats').innerText = `❤️ Вместе уже: ${diff} дн.`;
-                document.getElementById('relDateInput').value = currentData.rel_date;
-            }
-            if (currentData.custom_photo) { document.getElementById('mainPhoto').src = currentData.custom_photo; }
-            let renderList = (id, arr, key) => {
-                let list = document.getElementById(id); list.innerHTML = '';
-                arr.forEach((item, i) => {
-                    let div = document.createElement('div'); 
-                    div.className = 'item' + (item.done ? ' done' : '');
-                    div.innerHTML = `
-                        <span>${item.done ? '✅' : '🔸'} ${item.text}</span>
-                        <div>
-                            <button class="done-btn" onclick="toggleItem('${key}', ${i})">${item.done ? '↩️' : '✔️'}</button>
-                            <button class="del-btn" onclick="delItem('${key}', ${i})">❌</button>
-                        </div>
-                    `;
-                    list.appendChild(div);
-                });
-            };
-            let formatArr = (arr) => arr.map(item => typeof item === 'string' ? {text: item, done: false} : item);
-            renderList('plansList', formatArr(currentData.plans), 'plans');
-            renderList('packingList', formatArr(currentData.packing), 'packing');
-            renderList('notesList', formatArr(currentData.notes), 'notes');
-        }
-
-        async function buyPremium() {
-            tg.showAlert("Для покупки перейдите в чат с ботом и напишите /premium");
-        }
-
-        async def saveData() {
-            await fetch(`/api/data?user_id=${userId}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(currentData) });
-            updateUI();
-        }
-        
-        async function setDate() { let val = document.getElementById('dateInput').value; if (!val) return; currentData.meet_date = val; await saveData(); }
-        async function setRelDate() { let val = document.getElementById('relDateInput').value; if (!val) return; currentData.rel_date = val; await saveData(); }
-        async function updateTitle() { let newTitle = document.getElementById('titleInput').value; if (newTitle.trim()) { currentData.title = newTitle; await saveData(); tg.showAlert("✅ Название изменено!"); } }
-        async function unlinkPartner() { if (confirm("Отвязать партнёра?")) { await fetch(`/api/unlink?user_id=${userId}`, { method: 'POST' }); tg.showAlert("✅ Партнёр отвязан."); loadData(); } }
-        async function applyAllSettings() { 
-            if (document.getElementById('bgColor').value) currentData.bg_color = document.getElementById('bgColor').value;
-            if (document.getElementById('btnColor').value) currentData.btn_color = document.getElementById('btnColor').value;
-            if (document.getElementById('fontSize').value) currentData.font_size = document.getElementById('fontSize').value;
-            currentData.font_style = document.getElementById('fontStyle').value;
-            if (document.getElementById('photoInput').value) currentData.custom_photo = document.getElementById('photoInput').value;
-            await saveData(); 
-        }
-        async function addPlan() { let val = document.getElementById('planInput').value; if (!val) return; currentData.plans.push({text: val, done: false}); document.getElementById('planInput').value = ''; await saveData(); }
-        async function addPacking() { let val = document.getElementById('packingInput').value; if (!val) return; currentData.packing.push({text: val, done: false}); document.getElementById('packingInput').value = ''; await saveData(); }
-        async function addNote() { let val = document.getElementById('noteInput').value; if (!val) return; currentData.notes.push({text: val, done: false}); document.getElementById('noteInput').value = ''; await saveData(); }
-        async function toggleItem(key, index) { currentData[key][index].done = !currentData[key][index].done; await saveData(); }
-        async function delItem(key, index) { currentData[key].splice(index, 1); await saveData(); }
-        function showAlert() { if (currentData.meet_date) { let meet = new Date(currentData.meet_date); let today = new Date(); let diff = Math.ceil((meet - today) / (1000 * 60 * 60 * 24)); tg.showAlert(`💖 До встречи: ${diff} дн.!`); } else { tg.showAlert("Дата не задана"); } }
-        
         loadData();
     </script>
 </body>
 </html>
 """
-
 # --- СТРАНИЦА ДЛЯ ИГРЫ SPICER (ИСПРАВЛЕНИЕ 404) ---
-SPICER_PAGE = """
+ SPICER_PAGE = """
 <!DOCTYPE html>
 <html>
 <head>
