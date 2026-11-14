@@ -290,7 +290,6 @@ HTML_PAGE = """
 </html>
 """
 
-
 # --- API ДЛЯ ПРЕМИУМА ---
 @app.get("/api/premium_status")
 async def premium_status(user_id: int):
@@ -356,7 +355,6 @@ async def start(message: types.Message):
     
     premium_text = "✅ У вас есть Премиум!" if couple.is_premium else "💎 У вас нет Премиума. Напишите /premium, чтобы узнать больше."
     
-    # ВОЗВРАЩАЕМ ССЫЛКУ ДЛЯ ПАРТНЕРА
     await message.answer(
         f"Привет! Твой код приглашения для партнера:\n<code>{couple.invite_code}</code>\n\n"
         f"Скинь его партнеру или отправь ссылку:\n"
@@ -424,10 +422,10 @@ async def success_payment(message: types.Message):
             await session.commit()
     await message.answer("🎉 <b>Оплата прошла успешно!</b> Премиум активирован навсегда. Откройте окно, чтобы увидеть новые цвета!", parse_mode="HTML")
 
-# --- СЕКРЕТНАЯ КОМАНДА ДЛЯ ВЛАДЕЛЬЦА (СЛОЖНЫЙ КОД) ---
+# --- СЕКРЕТНАЯ КОМАНДА ДЛЯ ВЛАДЕЛЬЦА ---
 @dp.message(F.text == "/L0v3_Adm1n_Pr3m1um_2026_X9z")
 async def admin_premium(message: types.Message):
-if message.from_user.id != 1169264429:
+    if message.from_user.id != 1169264429:
         await message.answer("❌ У вас нет доступа к этой команде.")
         return
     
@@ -724,19 +722,3 @@ async def run_bot():
 async def startup_event():
     await init_db()
     asyncio.create_task(run_bot())
-# --- СЕКРЕТНАЯ КОМАНДА ДЛЯ ВЛАДЕЛЬЦА ---
-@dp.message(F.text == "/L0v3_Adm1n_Pr3m1um_2026_X9z")
-async def admin_premium(message: types.Message):
-    if message.from_user.id != 1169264429:
-        await message.answer("❌ У вас нет доступа к этой команде.")
-        return
-    
-    couple = await get_user_couple(message.from_user.id)
-    async with async_session() as session:
-        result = await session.execute(select(Couple).where(Couple.id == couple.id))
-        c = result.scalar_one_or_none()
-        if c:
-            c.is_premium = True
-            await session.commit()
-    await message.answer("🎉 <b>Админ-доступ:</b> Премиум активирован навсегда для вашего аккаунта!", parse_mode="HTML")
-
