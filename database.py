@@ -14,15 +14,19 @@ Base = declarative_base()
 class Couple(Base):
     __tablename__ = "couples"
     id = Column(Integer, primary_key=True, index=True)
-    user1_id = Column(BigInteger, nullable=False)
-    user2_id = Column(BigInteger, nullable=True)
+    user1_id = Column(BigInteger, nullable=False, index=True)
+    user2_id = Column(BigInteger, nullable=True, index=True)
     invite_code = Column(String, unique=True, index=True)
-    is_premium = Column(Boolean, default=False)  # Флаг премиума
+    is_premium = Column(Boolean, default=False)
     data_json = Column(JSON, default={})
 
 async def init_db():
     async with engine.begin() as conn:
-        # ВНИМАНИЕ: Эта строка удаляет старую таблицу при каждом запуске!
-        # Мы используем её, чтобы гарантированно применить новые поля.
-        await conn.execute(text('DROP TABLE IF EXISTS couples;'))
+        # 1. Создаем таблицу, если её нет (данные не тронутся)
         await conn.run_sync(Base.metadata.create_all)
+        # 2. Безопасно добавляем индексы, если их нет (данные сохранятся)
+        try:
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS ix_couples_user1_id ON couples (user1_id);'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS ix_couples_user2_id ON couples (user2_id);'))
+        except Exception as e:
+            print(f"Индексы уже существуют: {e}")
