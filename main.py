@@ -12,6 +12,8 @@ import asyncio
 import uuid
 import os
 import logging
+import requests
+import io
 
 try:
     from yookassa import Configuration, Payment
@@ -29,6 +31,7 @@ app = FastAPI()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 SERVER_URL = "https://love-app-rb47.onrender.com"
+IMGBB_API_KEY = os.getenv("IMGBB_API_KEY")
 
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID", "ВСТАВЬТЕ_СВОЙ_SHOP_ID")
 YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY", "ВСТАВЬТЕ_СВОЙ_SECRET_KEY")
@@ -388,6 +391,36 @@ async def start(message: types.Message):
     
     await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
+@dp.message(F.photo)
+async def handle_photo_upload(message: types.Message):
+    if not IMGBB_API_KEY:
+        await message.answer("❌ Ошибка: IMGBB_API_KEY не настроен на сервере.")
+        return
+    
+    photo = message.photo[-1]
+    file_in_memory = await bot.download(photo)
+    
+    try:
+        response = requests.post(
+            "https://api.imgbb.com/1/upload",
+            params={"key": IMGBB_API_KEY},
+            files={"image": file_in_memory.getvalue()}
+        )
+        
+        data = response.json()
+        image_url = data["data"]["url"]
+        
+        couple = await get_user_couple(message.from_user.id)
+        json_data = couple.data_json
+        json_data["custom_photo"] = image_url
+        await update_couple_data(couple.id, json_data)
+        
+        await message.answer("✅ Фото обновлено! Теперь оно в Mini App.")
+        
+    except Exception as e:
+        logger.error(f"Ошибка ImgBB: {e}")
+        await message.answer("❌ Ошибка при загрузке фото. Попробуй позже.")
+
 @dp.message(F.text == "/premium")
 async def premium_cmd(message: types.Message):
     text = (
@@ -593,7 +626,8 @@ async def guide(message: types.Message):
         "• Скопируй ссылку и отправь партнеру.\n\n"
         "💻 <b>2. Mini App</b>\n"
         "• Жми «💖 Открыть наше окно» и добавляй планы.\n"
-        "• Внизу окна есть палитра цветов и кнопка отвязки.\n\n"
+        "• Внизу окна есть палитра цветов и кнопка отвязки.\n"
+        "• Чтобы поменять фото, просто отправь боту картинку в чат!\n\n"
         "🛠 <b>3. Команды:</b>\n"
         "📅 /дата 2026-12-31\n❤️ /отношения 2024-01-01\n📊 /дни\n📋 /план Текст\n🎒 /вещь Текст\n📝 /заметка Текст\n📋 /отчет\n🏷 /название Имя\n🎨 /стиль #17212b #e91e63 24px italic\n\n"
         "💎 <b>4. Премиум:</b>\n"
