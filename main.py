@@ -33,6 +33,9 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 SERVER_URL = "https://love-app-rb47.onrender.com"
 IMGBB_API_KEY = os.getenv("IMGBB_API_KEY")
 
+# --- НОВАЯ СТАНДАРТНАЯ КАРТИНКА ---
+DEFAULT_PHOTO_URL = "https://i.ibb.co/5gQ6z3qN/b4cb15162757b6ec50e6339d2f55266b.jpg"
+
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID", "ВСТАВЬТЕ_СВОЙ_SHOP_ID")
 YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY", "ВСТАВЬТЕ_СВОЙ_SECRET_KEY")
 if YOOKASSA_AVAILABLE:
@@ -64,7 +67,7 @@ async def get_user_couple(user_id: int, create_if_missing=True):
                 new_code = f"LOVE-{uuid.uuid4().hex[:4].upper()}"
                 couple = Couple(user1_id=user_id, invite_code=new_code, data_json={
                     "meet_date": None, "plans": [], "packing": [], "notes": [], 
-                    "custom_photo": "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg", 
+                    "custom_photo": DEFAULT_PHOTO_URL, # <--- ИСПОЛЬЗУЕМ НОВУЮ ССЫЛКУ
                     "title": "💖 Наша пара 💖",
                     "bg_color": "#17212b", "btn_color": "#2481cc", 
                     "rel_date": None, "font_size": "22px", "font_style": "italic"
@@ -176,9 +179,7 @@ HTML_PAGE = """
             <option value="italic">Курсив</option>
             <option value="bold">Жирный</option>
         </select>
-        <p><b>Фото:</b></p>
-        <input type="text" id="photoInput" placeholder="Ссылка на новую картинку...">
-        <button onclick="applyAllSettings()" style="background:#4caf50;">Применить всё</button>
+        <button onclick="applyAllSettings()" style="background:#4caf50; margin-top:10px;">Применить всё</button>
         <button onclick="unlinkPartner()" class="danger-btn">🗑 Отвязать партнёра</button>
         
         <div class="premium-section">
@@ -298,7 +299,6 @@ HTML_PAGE = """
             if (document.getElementById('btnColor').value) currentData.btn_color = document.getElementById('btnColor').value;
             if (document.getElementById('fontSize').value) currentData.font_size = document.getElementById('fontSize').value;
             currentData.font_style = document.getElementById('fontStyle').value;
-            if (document.getElementById('photoInput').value) currentData.custom_photo = document.getElementById('photoInput').value;
             await saveData(); 
         }
         async function addPlan() { let val = document.getElementById('planInput').value; if (!val) return; currentData.plans.push({text: val, done: false}); document.getElementById('planInput').value = ''; await saveData(); }
@@ -690,7 +690,7 @@ async def set_title(message: types.Message):
 @dp.message(F.text == "/фото")
 async def photo_cmd(message: types.Message):
     couple = await get_user_couple(message.from_user.id)
-    photo_url = couple.data_json.get("custom_photo") or "https://i.ibb.co/LhH0r3tQ/IMG-20261108-024248-959.jpg"
+    photo_url = couple.data_json.get("custom_photo") or DEFAULT_PHOTO_URL
     await message.answer_photo(photo=photo_url, caption="💖 <i>Наша фоточка</i>", parse_mode="HTML")
 
 @dp.message(F.text == "/любовь")
